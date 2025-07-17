@@ -1,0 +1,154 @@
+@import './base.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 自定义样式层 */
+@layer base {
+  * {
+    border-color: #e5e7eb; /* gray-200 */
+  }
+  
+  html {
+    tab-size: 4;
+  }
+  
+  body {
+    @apply min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300;
+    font-family: 'Inter', system-ui, sans-serif;
+    user-select: none;
+  }
+}
+
+@layer components {
+  /* 按钮组件样式 */
+  .btn-primary {
+    @apply px-4 py-2 bg-primary-500 text-white rounded-lg font-medium 
+           hover:bg-primary-600 active:bg-primary-700 
+           transition-colors duration-200 
+           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+  }
+  
+  .btn-secondary {
+    @apply px-4 py-2 bg-secondary-500 text-white rounded-lg font-medium 
+           hover:bg-secondary-600 active:bg-secondary-700 
+           transition-colors duration-200 
+           focus:outline-none focus:ring-2 focus:ring-secondary-500 focus:ring-offset-2;
+  }
+  
+  .btn-ghost {
+    @apply px-4 py-2 bg-transparent text-gray-700 dark:text-gray-300 rounded-lg font-medium 
+           hover:bg-gray-100 dark:hover:bg-gray-800 
+           transition-colors duration-200;
+  }
+  
+  /* 卡片组件样式 */
+  .card {
+    @apply bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 
+           transition-colors duration-300;
+  }
+  
+  /* 输入框样式 */
+  .input {
+    @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 
+           bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100
+           rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent 
+           transition-colors duration-200;
+  }
+  
+  /* 计时器圆环样式 */
+  .timer-circle {
+    @apply transform-gpu transition-all duration-300 ease-in-out;
+  }
+  
+  .timer-progress {
+    @apply stroke-current text-primary-500 transition-all duration-1000 ease-linear;
+    stroke-linecap: round;
+    stroke-dasharray: 314.159; /* 2 * π * 50 (半径) */
+    stroke-dashoffset: 314.159;
+    transform-origin: center;
+    transform: rotate(-90deg);
+  }
+  
+  /* 任务列表样式 */
+  .task-item {
+    @apply flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700 
+           hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-200;
+  }
+  
+  .task-item:last-child {
+    @apply border-b-0;
+  }
+  
+  /* 统计卡片样式 */
+  .stat-card {
+    @apply card p-6 text-center;
+  }
+  
+  .stat-number {
+    @apply text-3xl font-bold text-gray-900 dark:text-gray-100;
+  }
+  
+  .stat-label {
+    @apply text-sm text-gray-500 dark:text-gray-400 mt-1;
+  }
+}
+
+@layer utilities {
+  /* 自定义工具类 */
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* 渐变文字 */
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary-500 to-secondary-500 bg-clip-text text-transparent;
+  }
+  
+  /* 玻璃态效果 */
+  .glass {
+    @apply backdrop-blur-md bg-white/10 dark:bg-black/10 border border-white/20;
+  }
+}
+
+/* 深色模式特定样式 */
+@media (prefers-color-scheme: dark) {
+  .auto-dark {
+    @apply dark;
+  }
+}
+
+/* 动画关键帧 */
+@keyframes shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, 
+    #f3f4f6 25%, 
+    #e5e7eb 50%, 
+    #f3f4f6 75%);
+  background-size: 200px 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.dark .shimmer {
+  background: linear-gradient(90deg, 
+    #1f2937 25%, 
+    #374151 50%, 
+    #1f2937 75%);
+}
