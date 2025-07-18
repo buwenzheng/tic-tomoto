@@ -33,6 +33,7 @@ const ThemeToggle: React.FC = memo(() => {
       document.documentElement.classList.remove('dark')
       localStorage.setItem('theme', 'light')
     }
+    console.log('Theme toggle clicked, current isDark:', isDark)
   }, [isDark])
 
   const toggleTheme = (): void => {
@@ -43,13 +44,13 @@ const ThemeToggle: React.FC = memo(() => {
   return (
     <button
       onClick={toggleTheme}
-      className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+      className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors no-drag-region pointer-events-auto"
       title={isDark ? '切换到浅色模式' : '切换到深色模式'}
     >
       {isDark ? (
-        <Sun className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+        <Sun className="w-4 h-4 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100" />
       ) : (
-        <Moon className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+        <Moon className="w-4 h-4 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100" />
       )}
     </button>
   )
@@ -107,7 +108,7 @@ const WindowControls: React.FC = memo(() => {
 
       <button
         onClick={handleClose}
-        className="w-8 h-8 flex items-center justify-center rounded hover:bg-red-500 hover:text-white transition-colors"
+        className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         title="关闭"
       >
         <X className="w-4 h-4 text-gray-600 dark:text-gray-400" />
@@ -121,8 +122,8 @@ WindowControls.displayName = 'WindowControls'
 // 顶部标题栏组件
 const TitleBar: React.FC = memo(() => {
   return (
-    <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 drag-region">
-      <div className="flex items-center space-x-3">
+    <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center space-x-3 flex-1 drag-region">
         <div className="w-6 h-6 bg-gradient-to-br from-red-500 to-orange-500 rounded flex items-center justify-center">
           <span className="text-white text-sm">🍅</span>
         </div>

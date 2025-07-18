@@ -28,6 +28,10 @@ interface TomatoAPI {
     focus: () => void
     setSize: (width: number, height: number) => void
     center: () => void
+    isMaximized: () => Promise<boolean>
+    maximize: () => void
+    unmaximize: () => void
+    close: () => void
   }
 
   // 系统API
