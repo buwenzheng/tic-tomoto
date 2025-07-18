@@ -1,7 +1,7 @@
 import React, { useState, useEffect, memo } from 'react'
 import { Outlet, useLocation, NavLink } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Clock, CheckSquare, BarChart3, Settings, Sun, Moon } from 'lucide-react'
+import { Clock, CheckSquare, BarChart3, Settings, Sun, Moon, Minus, Maximize2, X } from 'lucide-react'
 import clsx from 'clsx'
 
 // 导航项配置
@@ -12,93 +12,44 @@ const navigationItems = [
   { path: 'settings', label: '设置', icon: Settings }
 ]
 
-// Logo组件
-const Logo: React.FC = memo(() => (
-  <div className="flex items-center space-x-3">
-    <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-500 rounded-lg flex items-center justify-center">
-      <span className="text-white text-lg">🍅</span>
-    </div>
-    <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">番茄时钟</h1>
-  </div>
-))
-
-Logo.displayName = 'Logo'
-
-// 导航链接组件
-interface NavItemProps {
-  path: string
-  label: string
-  icon: React.FC<{ className?: string }>
-  isActive: boolean
-}
-
-const NavItem: React.FC<NavItemProps> = memo(({ path, label, icon: Icon, isActive }) => (
-  <NavLink
-    to={path}
-    className={clsx(
-      'relative px-4 py-2 rounded-lg font-medium transition-all duration-200',
-      isActive
-        ? 'text-primary-600 dark:text-primary-400'
-        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800'
-    )}
-  >
-    <div className="flex items-center space-x-2">
-      <Icon className="w-4 h-4" />
-      <span>{label}</span>
-    </div>
-
-    {isActive && (
-      <motion.div
-        className="absolute inset-0 bg-primary-50 dark:bg-primary-900/30 rounded-lg -z-10"
-        layoutId="activeTab"
-        transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
-      />
-    )}
-  </NavLink>
-))
-
-NavItem.displayName = 'NavItem'
-
 // 主题切换组件
 const ThemeToggle: React.FC = memo(() => {
-  const [isDark, setIsDark] = useState(false)
-
-  useEffect(() => {
-    // 检查系统主题偏好
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    setIsDark(mediaQuery.matches)
-
-    const handleChange = (e: MediaQueryListEvent): void => {
-      setIsDark(e.matches)
+  const [isDark, setIsDark] = useState(() => {
+    // 检查本地存储的主题设置
+    const savedTheme = localStorage.getItem('theme')
+    if (savedTheme) {
+      return savedTheme === 'dark'
     }
-
-    mediaQuery.addEventListener('change', handleChange)
-    return () => mediaQuery.removeEventListener('change', handleChange)
-  }, [])
+    // 检查系统主题偏好
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  })
 
   useEffect(() => {
-    // 应用主题
+    // 应用主题到DOM
     if (isDark) {
       document.documentElement.classList.add('dark')
+      localStorage.setItem('theme', 'dark')
     } else {
       document.documentElement.classList.remove('dark')
+      localStorage.setItem('theme', 'light')
     }
   }, [isDark])
 
   const toggleTheme = (): void => {
+    console.log('Theme toggle clicked, current isDark:', isDark)
     setIsDark(!isDark)
   }
 
   return (
     <button
       onClick={toggleTheme}
-      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+      className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
       title={isDark ? '切换到浅色模式' : '切换到深色模式'}
     >
       {isDark ? (
-        <Sun className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+        <Sun className="w-4 h-4 text-gray-600 dark:text-gray-400" />
       ) : (
-        <Moon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+        <Moon className="w-4 h-4 text-gray-600 dark:text-gray-400" />
       )}
     </button>
   )
@@ -106,34 +57,142 @@ const ThemeToggle: React.FC = memo(() => {
 
 ThemeToggle.displayName = 'ThemeToggle'
 
-// 导航栏组件
-const Navigation: React.FC = memo(() => {
-  const location = useLocation()
-  const currentPath = location.pathname.slice(1) // 移除开头的 '/'
+// 窗口控制按钮组件
+const WindowControls: React.FC = memo(() => {
+  const handleMinimize = (): void => {
+    if (window.tomatoAPI?.window?.minimize) {
+      window.tomatoAPI.window.minimize()
+    }
+  }
+
+  const handleMaximize = async (): Promise<void> => {
+    const win = window.tomatoAPI?.window
+    if (win?.isMaximized && win?.maximize && win?.unmaximize) {
+      try {
+        const isMaximized = await win.isMaximized()
+        if (isMaximized) {
+          win.unmaximize()
+        } else {
+          win.maximize()
+        }
+      } catch (error) {
+        console.error('Failed to toggle maximize:', error)
+      }
+    }
+  }
+
+  const handleClose = (): void => {
+    if (window.tomatoAPI?.window?.close) {
+      window.tomatoAPI.window.close()
+    }
+  }
 
   return (
-    <nav className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-      <Logo />
+    <div className="flex items-center space-x-1 no-drag-region">
+      <button
+        onClick={handleMinimize}
+        className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        title="最小化"
+      >
+        <Minus className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+      </button>
 
-      {/* 导航标签 */}
-      <div className="flex items-center space-x-1">
-        {navigationItems.map((item) => (
-          <NavItem
-            key={item.path}
-            path={item.path}
-            label={item.label}
-            icon={item.icon}
-            isActive={currentPath === item.path}
-          />
-        ))}
-      </div>
+      <button
+        onClick={handleMaximize}
+        className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        title="最大化/还原"
+      >
+        <Maximize2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+      </button>
 
-      <ThemeToggle />
-    </nav>
+      <button
+        onClick={handleClose}
+        className="w-8 h-8 flex items-center justify-center rounded hover:bg-red-500 hover:text-white transition-colors"
+        title="关闭"
+      >
+        <X className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+      </button>
+    </div>
   )
 })
 
-Navigation.displayName = 'Navigation'
+WindowControls.displayName = 'WindowControls'
+
+// 顶部标题栏组件
+const TitleBar: React.FC = memo(() => {
+  return (
+    <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 drag-region">
+      <div className="flex items-center space-x-3">
+        <div className="w-6 h-6 bg-gradient-to-br from-red-500 to-orange-500 rounded flex items-center justify-center">
+          <span className="text-white text-sm">🍅</span>
+        </div>
+        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">番茄时钟</span>
+      </div>
+      
+      <div className="flex items-center space-x-2">
+        <ThemeToggle />
+        <WindowControls />
+      </div>
+    </div>
+  )
+})
+
+TitleBar.displayName = 'TitleBar'
+
+// 活动栏导航项组件
+interface ActivityBarItemProps {
+  path: string
+  label: string
+  icon: React.FC<{ className?: string }>
+  isActive: boolean
+}
+
+const ActivityBarItem: React.FC<ActivityBarItemProps> = memo(({ path, label, icon: Icon, isActive }) => (
+  <NavLink
+    to={path}
+    className={clsx(
+      'relative flex items-center justify-center w-12 h-12 rounded-lg transition-all duration-200 group',
+      isActive
+        ? 'bg-primary-100 dark:bg-primary-900/50 text-primary-600 dark:text-primary-400'
+        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800'
+    )}
+    title={label}
+  >
+    <Icon className="w-5 h-5" />
+    
+    {isActive && (
+      <motion.div
+        className="absolute left-0 top-0 bottom-0 w-1 bg-primary-600 dark:bg-primary-400 rounded-r"
+        layoutId="activeIndicator"
+        transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+      />
+    )}
+  </NavLink>
+))
+
+ActivityBarItem.displayName = 'ActivityBarItem'
+
+// 活动栏组件
+const ActivityBar: React.FC = memo(() => {
+  const location = useLocation()
+  const currentPath = location.pathname.slice(1)
+
+  return (
+    <aside className="w-16 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col items-center py-4 space-y-2">
+      {navigationItems.map((item) => (
+        <ActivityBarItem
+          key={item.path}
+          path={item.path}
+          label={item.label}
+          icon={item.icon}
+          isActive={currentPath === item.path}
+        />
+      ))}
+    </aside>
+  )
+})
+
+ActivityBar.displayName = 'ActivityBar'
 
 // 页面过渡动画组件
 const PageTransition: React.FC<{ children: React.ReactNode }> = memo(({ children }) => {
@@ -157,18 +216,25 @@ PageTransition.displayName = 'PageTransition'
 // 应用布局组件
 export const AppLayout: React.FC = () => {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-      <Navigation />
-
-      <main className="container mx-auto px-4 py-8">
-        <PageTransition>
-          <Outlet />
-        </PageTransition>
-      </main>
-
-      <footer className="text-center py-4 text-xs text-gray-400 dark:text-gray-600">
-        <p>番茄时钟 v1.0.0 - 专注工作，高效生活</p>
-      </footer>
+    <div className="h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 flex flex-col">
+      <TitleBar />
+      
+      <div className="flex flex-1 overflow-hidden">
+        <ActivityBar />
+        
+        <main className="flex-1 overflow-auto">
+          <div className="container mx-auto px-6 py-8">
+            <PageTransition>
+              <Outlet />
+            </PageTransition>
+          </div>
+          
+          <footer className="text-center py-4 text-xs text-gray-400 dark:text-gray-600">
+            <p>番茄时钟 v1.0.0 - 专注工作，高效生活</p>
+          </footer>
+        </main>
+      </div>
     </div>
   )
 }
+ 

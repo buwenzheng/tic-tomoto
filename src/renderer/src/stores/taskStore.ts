@@ -3,7 +3,7 @@ import { immer } from 'zustand/middleware/immer'
 import { subscribeWithSelector } from 'zustand/middleware'
 import { TaskPriority } from '@/types'
 import type { Task, TaskFormData } from '@/types'
-import { StorageFactory } from '@/services/storage'
+import { storage } from '@/services/storage'
 import { useMemo } from 'react'
 
 // 任务Store接口
@@ -21,10 +21,10 @@ interface TaskStore {
   // 操作
   loadTasks: () => Promise<void>
   createTask: (taskData: TaskFormData) => Promise<void>
-  updateTask: (id: string, updates: Partial<Task>) => Promise<void>
+  updateTask: (id: string, updates: Partial<Task>) => Promise<Task>
   deleteTask: (id: string) => Promise<void>
-  completeTask: (id: string) => Promise<void>
-  addPomodoroToTask: (id: string) => Promise<void>
+  completeTask: (id: string) => Promise<Task | undefined>
+  addPomodoroToTask: (id: string) => Promise<Task | undefined>
 
   // 过滤和排序
   setFilter: (filter: 'all' | 'pending' | 'in-progress' | 'completed') => void
@@ -71,11 +71,10 @@ export const useTaskStore = create<TaskStore>()(
         })
 
         try {
-          const storage = StorageFactory.getAdapter()
-          const tasks = await storage.tasks.getAll()
+          const data = await storage.read()
 
           set((draft) => {
-            draft.tasks = tasks
+            draft.tasks = data.tasks
             draft.loading = false
           })
         } catch (error) {
@@ -94,15 +93,21 @@ export const useTaskStore = create<TaskStore>()(
         })
 
         try {
-          const storage = StorageFactory.getAdapter()
-          const newTask = await storage.tasks.create({
+          const data = await storage.read()
+          const newTask: Task = {
+            id: crypto.randomUUID(),
             ...taskData,
             completedPomodoros: 0,
-            isCompleted: false
-          })
+            isCompleted: false,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+
+          data.tasks.push(newTask)
+          await storage.write(data)
 
           set((draft) => {
-            draft.tasks.unshift(newTask)
+            draft.tasks.push(newTask)
             draft.loading = false
           })
         } catch (error) {
@@ -116,8 +121,21 @@ export const useTaskStore = create<TaskStore>()(
       // 更新任务
       updateTask: async (id: string, updates: Partial<Task>) => {
         try {
-          const storage = StorageFactory.getAdapter()
-          const updatedTask = await storage.tasks.update(id, updates)
+          const data = await storage.read()
+          const taskIndex = data.tasks.findIndex((task) => task.id === id)
+
+          if (taskIndex === -1) {
+            throw new Error(`任务 ${id} 不存在`)
+          }
+
+          const updatedTask = {
+            ...data.tasks[taskIndex],
+            ...updates,
+            updatedAt: new Date()
+          }
+
+          data.tasks[taskIndex] = updatedTask
+          await storage.write(data)
 
           set((draft) => {
             const index = draft.tasks.findIndex((task) => task.id === id)
@@ -125,18 +143,22 @@ export const useTaskStore = create<TaskStore>()(
               draft.tasks[index] = updatedTask
             }
           })
+
+          return updatedTask
         } catch (error) {
           set((draft) => {
             draft.error = error instanceof Error ? error.message : '更新任务失败'
           })
+          throw error
         }
       },
 
       // 删除任务
       deleteTask: async (id: string) => {
         try {
-          const storage = StorageFactory.getAdapter()
-          await storage.tasks.delete(id)
+          const data = await storage.read()
+          data.tasks = data.tasks.filter((task) => task.id !== id)
+          await storage.write(data)
 
           set((draft) => {
             draft.tasks = draft.tasks.filter((task) => task.id !== id)
@@ -151,18 +173,15 @@ export const useTaskStore = create<TaskStore>()(
       // 完成任务
       completeTask: async (id: string) => {
         try {
-          const storage = StorageFactory.getAdapter()
-          const updatedTask = await storage.tasks.update(id, {
+          const task = get().getTaskById(id)
+          if (!task) throw new Error(`任务 ${id} 不存在`)
+
+          const updatedTask = await get().updateTask(id, {
             isCompleted: true,
             completedAt: new Date()
           })
 
-          set((draft) => {
-            const index = draft.tasks.findIndex((task) => task.id === id)
-            if (index !== -1) {
-              draft.tasks[index] = updatedTask
-            }
-          })
+          return updatedTask
         } catch (error) {
           set((draft) => {
             draft.error = error instanceof Error ? error.message : '完成任务失败'
@@ -174,19 +193,13 @@ export const useTaskStore = create<TaskStore>()(
       addPomodoroToTask: async (id: string) => {
         try {
           const task = get().getTaskById(id)
-          if (!task) return
+          if (!task) throw new Error(`任务 ${id} 不存在`)
 
-          const storage = StorageFactory.getAdapter()
-          const updatedTask = await storage.tasks.update(id, {
+          const updatedTask = await get().updateTask(id, {
             completedPomodoros: task.completedPomodoros + 1
           })
 
-          set((draft) => {
-            const index = draft.tasks.findIndex((task) => task.id === id)
-            if (index !== -1) {
-              draft.tasks[index] = updatedTask
-            }
-          })
+          return updatedTask
         } catch (error) {
           set((draft) => {
             draft.error = error instanceof Error ? error.message : '更新任务失败'
@@ -231,8 +244,9 @@ export const useTaskStore = create<TaskStore>()(
         const completedTasks = get().tasks.filter((task) => task.isCompleted)
 
         try {
-          const storage = StorageFactory.getAdapter()
-          await Promise.all(completedTasks.map((task) => storage.tasks.delete(task.id)))
+          const data = await storage.read()
+          data.tasks = data.tasks.filter((task) => !task.isCompleted)
+          await storage.write(data)
 
           set((draft) => {
             draft.tasks = draft.tasks.filter((task) => !task.isCompleted)
@@ -245,26 +259,34 @@ export const useTaskStore = create<TaskStore>()(
       },
 
       markAllAsCompleted: async () => {
-        const incompleteTasks = get().tasks.filter((task) => !task.isCompleted)
-
         try {
-          const storage = StorageFactory.getAdapter()
-          await Promise.all(
-            incompleteTasks.map((task) =>
-              storage.tasks.update(task.id, {
-                isCompleted: true,
-                completedAt: new Date()
-              })
-            )
+          const data = await storage.read()
+          const now = new Date()
+
+          data.tasks = data.tasks.map((task) =>
+            task.isCompleted
+              ? task
+              : {
+                  ...task,
+                  isCompleted: true,
+                  completedAt: now,
+                  updatedAt: now
+                }
           )
 
+          await storage.write(data)
+
           set((draft) => {
-            draft.tasks.forEach((task) => {
-              if (!task.isCompleted) {
-                task.isCompleted = true
-                task.completedAt = new Date()
-              }
-            })
+            draft.tasks = draft.tasks.map((task) =>
+              task.isCompleted
+                ? task
+                : {
+                    ...task,
+                    isCompleted: true,
+                    completedAt: now,
+                    updatedAt: now
+                  }
+            )
           })
         } catch (error) {
           set((draft) => {
@@ -275,6 +297,10 @@ export const useTaskStore = create<TaskStore>()(
 
       // 初始化
       initialize: async () => {
+        // 避免重复初始化
+        if (window.isTaskStoreInitialized) return
+        window.isTaskStoreInitialized = true
+
         await get().loadTasks()
       }
     }))

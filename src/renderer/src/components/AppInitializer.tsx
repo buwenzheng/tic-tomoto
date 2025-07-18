@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { StorageFactory } from '@/services/storage'
+import { storage, StorageFactory } from '@/services/storage'
 
 interface AppInitializerProps {
   children: React.ReactNode
@@ -12,11 +12,12 @@ export const AppInitializer: React.FC<AppInitializerProps> = ({ children }) => {
   useEffect(() => {
     const initializeApp = async (): Promise<void> => {
       try {
-        await StorageFactory.createAdapter()
+        // 尝试读取存储以确保它已初始化
+        await storage.read()
         setIsInitialized(true)
       } catch (error) {
         console.error('Failed to initialize app:', error)
-        // 继续运行，使用内存存储
+        // 继续运行，使用默认数据
         setIsInitialized(true)
       }
     }
@@ -40,3 +41,4 @@ export const AppInitializer: React.FC<AppInitializerProps> = ({ children }) => {
 
   return <>{children}</>
 }
+ 

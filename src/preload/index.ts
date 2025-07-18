@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+// 修改导入方式，避免 ESM 导入问题
 import { electronAPI } from '@electron-toolkit/preload'
 
 // ===============================
@@ -33,6 +34,36 @@ const tomatoAPI = {
         console.error('Failed to check file exists:', error)
         return false
       }
+    },
+
+    getUserDataPath: async (): Promise<string> => {
+      try {
+        return await ipcRenderer.invoke('fs:getUserDataPath')
+      } catch (error) {
+        console.error('Failed to get user data path:', error)
+        return ''
+      }
+    }
+  },
+
+  // 数据库API - 安全的数据库访问
+  db: {
+    read: async (): Promise<any> => {
+      try {
+        return await ipcRenderer.invoke('db:read')
+      } catch (error) {
+        console.error('Failed to read database:', error)
+        throw error
+      }
+    },
+
+    write: async (data: any): Promise<boolean> => {
+      try {
+        return await ipcRenderer.invoke('db:write', data)
+      } catch (error) {
+        console.error('Failed to write to database:', error)
+        throw error
+      }
     }
   },
 
@@ -64,6 +95,22 @@ const tomatoAPI = {
 
     center: (): void => {
       ipcRenderer.send('window:center')
+    },
+
+    maximize: (): void => {
+      ipcRenderer.send('window:maximize')
+    },
+
+    unmaximize: (): void => {
+      ipcRenderer.send('window:unmaximize')
+    },
+
+    isMaximized: async (): Promise<boolean> => {
+      return await ipcRenderer.invoke('window:isMaximized')
+    },
+
+    close: (): void => {
+      ipcRenderer.send('window:close')
     }
   },
 

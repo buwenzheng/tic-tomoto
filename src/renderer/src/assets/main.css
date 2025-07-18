@@ -118,6 +118,17 @@ body {
   .glass {
     @apply backdrop-blur-md bg-white/10 dark:bg-black/10 border border-white/20;
   }
+  
+  /* 窗口拖拽区域 */
+  .drag-region {
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+  
+  .no-drag-region {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
 }
 
 /* 深色模式特定样式 */

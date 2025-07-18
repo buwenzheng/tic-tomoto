@@ -4,6 +4,7 @@ import { readFile, writeFile, existsSync, mkdirSync } from 'fs'
 import { promisify } from 'util'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { JSONFilePreset } from 'lowdb/node'
 
 // ===============================
 // 文件系统相关
@@ -22,6 +23,152 @@ const getUserDataPath = (): string => {
   }
 
   return dataDir
+}
+
+// ===============================
+// LowDB 数据库服务
+// ===============================
+
+// 数据库模式
+interface Schema {
+  tasks: any[]
+  timer: {
+    mode: string
+    timeLeft: number
+    totalTime: number
+    isRunning: boolean
+    isPaused: boolean
+  }
+  settings: {
+    workDuration: number
+    shortBreakDuration: number
+    longBreakDuration: number
+    autoStartBreaks: boolean
+    autoStartPomodoros: boolean
+    longBreakInterval: number
+    alarmSound: string
+    alarmVolume: number
+    tickingSound: string
+    tickingVolume: number
+    darkMode: string
+    minimizeToTray: boolean
+  }
+  stats: {
+    totalPomodoros: number
+    totalWorkTime: number
+    dailyPomodoros: Record<string, number>
+    weeklyPomodoros: Record<string, number>
+    monthlyPomodoros: Record<string, number>
+  }
+  version: number
+}
+
+// 默认数据
+const DEFAULT_DATA: Schema = {
+  tasks: [],
+  timer: {
+    mode: 'work',
+    timeLeft: 25 * 60,
+    totalTime: 25 * 60,
+    isRunning: false,
+    isPaused: false
+  },
+  settings: {
+    workDuration: 25,
+    shortBreakDuration: 5,
+    longBreakDuration: 15,
+    autoStartBreaks: false,
+    autoStartPomodoros: false,
+    longBreakInterval: 4,
+    alarmSound: 'bell',
+    alarmVolume: 0.8,
+    tickingSound: 'none',
+    tickingVolume: 0.5,
+    darkMode: 'auto',
+    minimizeToTray: true
+  },
+  stats: {
+    totalPomodoros: 0,
+    totalWorkTime: 0,
+    dailyPomodoros: {},
+    weeklyPomodoros: {},
+    monthlyPomodoros: {}
+  },
+  version: 1
+}
+
+// 数据库实例
+let db: any = null
+
+// 初始化数据库
+async function initializeDatabase(): Promise<void> {
+  if (db) return
+
+  try {
+    const dbPath = join(getUserDataPath(), 'tic-tomoto-data.json')
+    db = await JSONFilePreset<Schema>(dbPath, DEFAULT_DATA)
+    console.log('Database initialized successfully')
+  } catch (error) {
+    console.error('Failed to initialize database:', error)
+    throw error
+  }
+}
+
+// 数据迁移
+async function migrateData(data: Partial<Schema>): Promise<Schema> {
+  // 如果没有版本号，说明是旧数据，需要迁移
+  if (!data.version) {
+    return migrateFromV0(data)
+  }
+
+  // 未来可以添加更多版本的迁移
+  switch (data.version) {
+    case 1:
+      return data as Schema
+    default:
+      console.warn(`Unknown schema version: ${data.version}`)
+      return DEFAULT_DATA
+  }
+}
+
+// 从版本0迁移到版本1
+function migrateFromV0(oldData: Partial<Schema>): Schema {
+  const newData = { ...DEFAULT_DATA }
+
+  // 迁移任务数据
+  if (Array.isArray(oldData.tasks)) {
+    newData.tasks = oldData.tasks.map(task => ({
+      ...task,
+      createdAt: task.createdAt || new Date(),
+      updatedAt: task.updatedAt || new Date()
+    }))
+  }
+
+  // 迁移计时器数据
+  if (oldData.timer) {
+    newData.timer = {
+      ...newData.timer,
+      ...oldData.timer
+    }
+  }
+
+  // 迁移设置数据
+  if (oldData.settings) {
+    newData.settings = {
+      ...newData.settings,
+      ...oldData.settings
+    }
+  }
+
+  // 迁移统计数据
+  if (oldData.stats) {
+    newData.stats = {
+      ...newData.stats,
+      ...oldData.stats
+    }
+  }
+
+  return newData
 }
 
 // ===============================
@@ -79,12 +226,14 @@ function createWindow(): void {
     minHeight: 500,
     show: false,
     autoHideMenuBar: true,
-    titleBarStyle: 'hiddenInset',
+    frame: false, // 完全隐藏系统标题栏
+    titleBarStyle: 'hidden', // 隐藏标题栏
+    title: '番茄时钟', // 设置窗口标题
     vibrancy: 'under-window',
     visualEffectState: 'active',
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
-      preload: join(__dirname, '../preload/index.mjs'),
+      preload: join(__dirname, '../preload/index.cjs'),
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false,
@@ -97,7 +246,7 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     if (mainWindow) {
-      mainWindow.show()
+    mainWindow.show()
 
       // 开发模式下打开开发者工具
       if (is.dev) {
@@ -168,6 +317,38 @@ function setupIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('fs:getUserDataPath', async () => {
+    try {
+      return getUserDataPath()
+    } catch (error) {
+      console.error('Error getting user data path:', error)
+      return ''
+    }
+  })
+
+  // 数据库API
+  ipcMain.handle('db:read', async () => {
+    try {
+      await initializeDatabase()
+      return db.data
+    } catch (error) {
+      console.error('Error reading database:', error)
+      return DEFAULT_DATA
+    }
+  })
+
+  ipcMain.handle('db:write', async (_, data: Schema) => {
+    try {
+      await initializeDatabase()
+      db.data = await migrateData(data)
+      await db.write()
+      return true
+    } catch (error) {
+      console.error('Error writing to database:', error)
+      return false
+    }
+  })
+
   // 窗口控制API
   ipcMain.on('window:setAlwaysOnTop', (_, alwaysOnTop: boolean) => {
     if (mainWindow) {
@@ -208,6 +389,31 @@ function setupIpcHandlers(): void {
   ipcMain.on('window:center', () => {
     if (mainWindow) {
       mainWindow.center()
+    }
+  })
+
+  ipcMain.on('window:maximize', () => {
+    if (mainWindow) {
+      mainWindow.maximize()
+    }
+  })
+
+  ipcMain.on('window:unmaximize', () => {
+    if (mainWindow) {
+      mainWindow.unmaximize()
+    }
+  })
+
+  ipcMain.handle('window:isMaximized', () => {
+    if (mainWindow) {
+      return mainWindow.isMaximized()
+    }
+    return false
+  })
+
+  ipcMain.on('window:close', () => {
+    if (mainWindow) {
+      mainWindow.close()
     }
   })
 

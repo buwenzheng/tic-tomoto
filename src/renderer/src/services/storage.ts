@@ -1,251 +1,180 @@
-import type {
-  Task,
-  TaskRepository,
-  StatsRepository,
-  SettingsRepository,
-  StorageAdapter,
-  AppSettings,
-  TaskStatus,
-  ThemeMode,
-  FontSize
-} from '@/types'
+import { Schema, TimerMode, ThemeMode } from '../types'
 
-// 默认配置
-const defaultSettings: AppSettings = {
+// 默认数据
+export const DEFAULT_DATA: Schema = {
+  tasks: [],
   timer: {
+    mode: TimerMode.WORK,
+    timeLeft: 25 * 60, // 25分钟
+    totalTime: 25 * 60,
+    isRunning: false,
+    isPaused: false
+  },
+  settings: {
     workDuration: 25,
     shortBreakDuration: 5,
     longBreakDuration: 15,
-    longBreakInterval: 4,
     autoStartBreaks: false,
-    autoStartWork: false,
-    tickSound: false,
-    notificationSound: true,
-    strictMode: false
+    autoStartPomodoros: false,
+    longBreakInterval: 4,
+    alarmSound: 'bell',
+    alarmVolume: 0.8,
+    tickingSound: 'none',
+    tickingVolume: 0.5,
+    darkMode: ThemeMode.AUTO,
+    minimizeToTray: true
   },
-  general: {
-    language: 'zh-CN',
-    startMinimized: false,
-    minimizeToTray: true,
-    launchOnStartup: false,
-    enableShortcuts: true
+  stats: {
+    totalPomodoros: 0,
+    totalWorkTime: 0,
+    dailyPomodoros: {},
+    weeklyPomodoros: {},
+    monthlyPomodoros: {}
   },
-  appearance: {
-    theme: 'auto' as ThemeMode,
-    primaryColor: '#ef4444',
-    fontSize: 'medium' as FontSize,
-    compactMode: false,
-    showTaskProgress: true,
-    showSessionCounter: true
-  },
-  notifications: {
-    enabled: true,
-    sound: true,
-    desktop: true,
-    taskCompleted: true,
-    sessionCompleted: true,
-    breakReminder: true,
-    soundVolume: 0.7
-  },
-  advanced: {
-    dataBackup: true,
-    analyticsEnabled: false,
-    experimentalFeatures: false,
-    developerMode: false
-  }
+  version: 1
 }
 
-// Repository实现类
-class LocalTaskRepository implements TaskRepository {
-  constructor(
-    protected db: { data: { tasks: Task[] }; read: () => Promise<void>; write: () => Promise<void> }
-  ) {}
-
-  async getAll(): Promise<Task[]> {
-    await this.db.read()
-    return this.db.data.tasks
-  }
-
-  async getById(id: string): Promise<Task | null> {
-    await this.db.read()
-    return this.db.data.tasks.find((task: Task) => task.id === id) || null
-  }
-
-  async create(taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<Task> {
-    const now = new Date()
-    const task: Task = {
-      id: crypto.randomUUID(),
-      ...taskData,
-      createdAt: now,
-      updatedAt: now
-    }
-
-    await this.db.read()
-    this.db.data.tasks.push(task)
-    await this.db.write()
-
-    return task
-  }
-
-  async update(id: string, updates: Partial<Task>): Promise<Task> {
-    await this.db.read()
-    const taskIndex = this.db.data.tasks.findIndex((task: Task) => task.id === id)
-
-    if (taskIndex === -1) {
-      throw new Error(`Task with id ${id} not found`)
-    }
-
-    const updatedTask = {
-      ...this.db.data.tasks[taskIndex],
-      ...updates,
-      updatedAt: new Date()
-    }
-
-    this.db.data.tasks[taskIndex] = updatedTask
-    await this.db.write()
-
-    return updatedTask
-  }
-
-  async delete(id: string): Promise<void> {
-    await this.db.read()
-    const taskIndex = this.db.data.tasks.findIndex((task: Task) => task.id === id)
-
-    if (taskIndex === -1) {
-      throw new Error(`Task with id ${id} not found`)
-    }
-
-    this.db.data.tasks.splice(taskIndex, 1)
-    await this.db.write()
-  }
-
-  async getByCategory(category: string): Promise<Task[]> {
-    await this.db.read()
-    return this.db.data.tasks.filter((task: Task) => task.category === category)
-  }
-
-  async getByStatus(status: TaskStatus): Promise<Task[]> {
-    await this.db.read()
-    return this.db.data.tasks.filter((task: Task) => {
-      switch (status) {
-        case 'completed':
-          return task.isCompleted
-        case 'in-progress':
-          return !task.isCompleted && task.completedPomodoros > 0
-        case 'pending':
-          return !task.isCompleted && task.completedPomodoros === 0
-        default:
-          return false
-      }
-    })
-  }
+// 本地存储适配器接口
+export interface StorageAdapter {
+  read(): Promise<Schema>
+  write(data: Schema): Promise<void>
 }
 
-// 简化的Stats和Settings Repository
-class MockStatsRepository implements StatsRepository {
-  async getDailyStats(): Promise<null> {
-    return null
-  }
-
-  async getWeeklyStats(): Promise<null> {
-    return null
-  }
-
-  async getMonthlyStats(): Promise<null> {
-    return null
-  }
-
-  async getOverviewStats(): Promise<{
-    totalPomodoros: number
-    totalTasks: number
-    totalFocusTime: number
-    currentStreak: number
-    longestStreak: number
-    averageSessionLength: number
-    mostProductiveHour: number
-    favoriteCategory: string
-  }> {
-    return {
-      totalPomodoros: 0,
-      totalTasks: 0,
-      totalFocusTime: 0,
-      currentStreak: 0,
-      longestStreak: 0,
-      averageSessionLength: 0,
-      mostProductiveHour: 9,
-      favoriteCategory: ''
-    }
-  }
-
-  async addPomodoroSession(): Promise<void> {
-    // Mock implementation
-    return Promise.resolve()
-  }
-
-  async updateDailyStats(): Promise<void> {
-    // Mock implementation
-    return Promise.resolve()
-  }
-}
-
-class MockSettingsRepository implements SettingsRepository {
-  async get(): Promise<AppSettings> {
-    return defaultSettings
-  }
-
-  async update(updates: Partial<AppSettings>): Promise<AppSettings> {
-    return { ...defaultSettings, ...updates }
-  }
-
-  async reset(): Promise<AppSettings> {
-    return defaultSettings
-  }
-}
-
-// LocalStorageAdapter实现
+// 本地存储适配器 (localStorage)
 export class LocalStorageAdapter implements StorageAdapter {
-  public tasks: TaskRepository
-  public stats: StatsRepository
-  public settings: SettingsRepository
+  private readonly key: string
 
-  constructor(
-    protected db: { data: { tasks: Task[] }; read: () => Promise<void>; write: () => Promise<void> }
-  ) {
-    this.tasks = new LocalTaskRepository(db)
-    this.stats = new MockStatsRepository()
-    this.settings = new MockSettingsRepository()
+  constructor(key = 'tic-tomoto-data') {
+    this.key = key
   }
 
-  static async create(): Promise<LocalStorageAdapter> {
-    // 简化版本，使用内存存储
-    const memoryDb = {
-      data: {
-        tasks: []
-      },
-      read: async () => {},
-      write: async () => {}
+  async read(): Promise<Schema> {
+    try {
+      const data = localStorage.getItem(this.key)
+      if (!data) {
+        return DEFAULT_DATA
+      }
+      return this.migrate(JSON.parse(data))
+    } catch (error) {
+      console.error('Error reading from localStorage:', error)
+      return DEFAULT_DATA
     }
-    return new LocalStorageAdapter(memoryDb)
+  }
+
+  async write(data: Schema): Promise<void> {
+    try {
+      localStorage.setItem(this.key, JSON.stringify(data))
+    } catch (error) {
+      console.error('Error writing to localStorage:', error)
+      throw error
+    }
+  }
+
+  // 数据迁移机制
+  private async migrate(data: Partial<Schema>): Promise<Schema> {
+    // 如果没有版本号，说明是旧数据，需要迁移
+    if (!data.version) {
+      return this.migrateFromV0(data)
+    }
+
+    // 未来可以添加更多版本的迁移
+    switch (data.version) {
+      case 1:
+        return data as Schema
+      default:
+        console.warn(`Unknown schema version: ${data.version}`)
+        return DEFAULT_DATA
+    }
+  }
+
+  // 从版本0迁移到版本1
+  private migrateFromV0(oldData: Partial<Schema>): Schema {
+    const newData = { ...DEFAULT_DATA }
+
+    // 迁移任务数据
+    if (Array.isArray(oldData.tasks)) {
+      newData.tasks = oldData.tasks.map(task => ({
+        ...task,
+        createdAt: task.createdAt || new Date(),
+        updatedAt: task.updatedAt || new Date()
+      }))
+    }
+
+    // 迁移计时器数据
+    if (oldData.timer) {
+      newData.timer = {
+        ...newData.timer,
+        ...oldData.timer
+      }
+    }
+
+    // 迁移设置数据
+    if (oldData.settings) {
+      newData.settings = {
+        ...newData.settings,
+        ...oldData.settings
+      }
+    }
+
+    // 迁移统计数据
+    if (oldData.stats) {
+      newData.stats = {
+        ...newData.stats,
+        ...oldData.stats
+      }
+    }
+
+    return newData
   }
 }
 
-// 存储服务工厂
+// Electron 数据库适配器 (通过 IPC 访问主进程的 lowdb)
+export class ElectronDbAdapter implements StorageAdapter {
+  async read(): Promise<Schema> {
+    try {
+      if (!window.tomatoAPI?.db) {
+        console.warn('Database API not available, falling back to localStorage')
+        return new LocalStorageAdapter().read()
+      }
+      
+      const data = await window.tomatoAPI.db.read()
+      return data as Schema
+    } catch (error) {
+      console.error('Error reading from database:', error)
+      return DEFAULT_DATA
+    }
+  }
+
+  async write(data: Schema): Promise<void> {
+    try {
+      if (!window.tomatoAPI?.db) {
+        console.warn('Database API not available, falling back to localStorage')
+        return new LocalStorageAdapter().write(data)
+      }
+      
+      await window.tomatoAPI.db.write(data)
+    } catch (error) {
+      console.error('Error writing to database:', error)
+      throw error
+    }
+  }
+}
+
+// 存储工厂 - 根据运行环境选择适当的存储适配器
 export class StorageFactory {
-  private static instance: StorageAdapter | null = null
-
-  static async createAdapter(): Promise<StorageAdapter> {
-    if (this.instance) {
-      return this.instance
+  static createAdapter(): StorageAdapter {
+    // 检查是否在 Electron 环境中运行并且有数据库 API
+    const isElectron = !!window.tomatoAPI?.db
+    
+    if (isElectron) {
+      // 在 Electron 环境中使用数据库 API
+      return new ElectronDbAdapter()
+    } else {
+      // 在浏览器环境中使用 localStorage
+      return new LocalStorageAdapter()
     }
-
-    this.instance = await LocalStorageAdapter.create()
-    return this.instance
-  }
-
-  static getAdapter(): StorageAdapter {
-    if (!this.instance) {
-      throw new Error('Storage adapter not initialized. Call createAdapter() first.')
-    }
-    return this.instance
   }
 }
+
+// 创建存储实例
+export const storage = StorageFactory.createAdapter()

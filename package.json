@@ -18,7 +18,10 @@
     "postinstall": "electron-builder install-app-deps",
     "build:win": "npm run build && electron-builder --win --config",
     "build:mac": "npm run build && electron-builder --mac --config",
-    "build:linux": "npm run build && electron-builder --linux --config"
+    "build:linux": "npm run build && electron-builder --linux --config",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.0",
@@ -32,7 +35,7 @@
     "lowdb": "^7.0.1",
     "lucide-react": "^0.321.0",
     "react-hook-form": "^7.50.0",
-    "react-router-dom": "^6.22.0",
+    "react-router-dom": "^7.7.0",
     "recharts": "^2.11.0",
     "zod": "^3.22.4",
     "zustand": "^4.5.0"
@@ -42,23 +45,30 @@
     "@electron-toolkit/eslint-config-ts": "^1.0.1",
     "@electron-toolkit/tsconfig": "^1.0.1",
     "@tailwindcss/typography": "^0.5.16",
+    "@testing-library/jest-dom": "^6.4.2",
+    "@testing-library/react": "^14.2.1",
+    "@testing-library/user-event": "^14.5.2",
     "@types/node": "^18.19.9",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
+    "@types/testing-library__jest-dom": "^5.14.9",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/coverage-v8": "^1.2.1",
+    "@vitest/ui": "^1.2.1",
     "autoprefixer": "^10.4.17",
     "electron": "^28.2.0",
     "electron-builder": "^24.9.1",
     "electron-vite": "^2.0.0",
     "eslint": "^8.56.0",
     "eslint-plugin-react": "^7.33.2",
+    "jsdom": "^24.0.0",
     "postcss": "^8.4.33",
     "prettier": "^3.2.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.3.3",
-    "vite": "^5.0.12"
+    "vite": "^5.0.12",
+    "vitest": "^1.2.1"
   }
 }
- 

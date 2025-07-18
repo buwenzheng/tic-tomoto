@@ -10,6 +10,13 @@ interface TomatoAPI {
     readData: (filename: string) => Promise<string | null>
     saveData: (filename: string, data: string) => Promise<boolean>
     checkFileExists: (filename: string) => Promise<boolean>
+    getUserDataPath: () => Promise<string>
+  }
+
+  // 数据库API
+  db: {
+    read: () => Promise<any>
+    write: (data: any) => Promise<boolean>
   }
 
   // 窗口控制API

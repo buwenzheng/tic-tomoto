@@ -341,3 +341,80 @@ export type RequiredFields<T, K extends keyof T> = T & Required<Pick<T, K>>
 export type DeepPartial<T> = {
   [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P]
 }
+
+// 任务优先级
+export type TaskPriority = 'low' | 'medium' | 'high'
+
+// 任务类型
+export interface Task {
+  id: string
+  title: string
+  description?: string
+  priority: TaskPriority
+  category?: string
+  estimatedPomodoros: number
+  completedPomodoros: number
+  isCompleted: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+// 计时器模式
+export type TimerMode = 'work' | 'short-break' | 'long-break'
+
+// 计时器类型
+export interface Timer {
+  mode: TimerMode
+  timeLeft: number
+  totalTime: number
+  isRunning: boolean
+  isPaused: boolean
+}
+
+// 声音类型
+export type AlarmSound = 'bell' | 'digital' | 'analog' | 'none'
+export type TickingSound = 'clock' | 'digital' | 'none'
+
+// 主题模式
+export type ThemeMode = 'light' | 'dark' | 'system'
+
+// 设置类型
+export interface Settings {
+  workDuration: number
+  shortBreakDuration: number
+  longBreakDuration: number
+  autoStartBreaks: boolean
+  autoStartPomodoros: boolean
+  longBreakInterval: number
+  alarmSound: AlarmSound
+  alarmVolume: number
+  tickingSound: TickingSound
+  tickingVolume: number
+  darkMode: ThemeMode
+  minimizeToTray: boolean
+}
+
+// 统计类型
+export interface Stats {
+  totalPomodoros: number
+  totalWorkTime: number // 以秒为单位
+  dailyPomodoros: Record<string, number> // 日期字符串 -> 完成的番茄数
+  weeklyPomodoros: Record<string, number> // 周字符串 -> 完成的番茄数
+  monthlyPomodoros: Record<string, number> // 月字符串 -> 完成的番茄数
+}
+
+// 存储适配器类型
+export interface StorageAdapter {
+  read(): Promise<Schema>
+  write(data: Schema): Promise<void>
+}
+
+// 数据库模式
+export interface Schema {
+  tasks: Task[]
+  timer: Timer
+  settings: Settings
+  stats: Stats
+  version: number
+}
+ 

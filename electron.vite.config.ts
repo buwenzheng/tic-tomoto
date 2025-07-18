@@ -14,7 +14,8 @@ export default defineConfig({
       outDir: 'out/preload',
       rollupOptions: {
         output: {
-          entryFileNames: '[name].js'
+          entryFileNames: '[name].cjs',
+          format: 'cjs' // 使用 CommonJS 格式
         }
       }
     },
