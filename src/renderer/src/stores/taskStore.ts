@@ -12,12 +12,12 @@ interface TaskStore {
   tasks: Task[]
   loading: boolean
   error: string | null
-  
+
   // 过滤和排序
   filter: 'all' | 'pending' | 'in-progress' | 'completed'
   sortBy: 'createdAt' | 'priority' | 'completedPomodoros'
   sortOrder: 'asc' | 'desc'
-  
+
   // 操作
   loadTasks: () => Promise<void>
   createTask: (taskData: TaskFormData) => Promise<void>
@@ -25,21 +25,21 @@ interface TaskStore {
   deleteTask: (id: string) => Promise<void>
   completeTask: (id: string) => Promise<void>
   addPomodoroToTask: (id: string) => Promise<void>
-  
+
   // 过滤和排序
   setFilter: (filter: 'all' | 'pending' | 'in-progress' | 'completed') => void
   setSortBy: (sortBy: 'createdAt' | 'priority' | 'completedPomodoros') => void
   setSortOrder: (sortOrder: 'asc' | 'desc') => void
-  
+
   // 选择器
   getTaskById: (id: string) => Task | undefined
   getTasksByCategory: (category: string) => Task[]
   getActiveTask: () => Task | undefined
-  
+
   // 批量操作
   deleteCompletedTasks: () => Promise<void>
   markAllAsCompleted: () => Promise<void>
-  
+
   // 初始化
   initialize: () => Promise<void>
 }
@@ -73,7 +73,7 @@ export const useTaskStore = create<TaskStore>()(
         try {
           const storage = StorageFactory.getAdapter()
           const tasks = await storage.tasks.getAll()
-          
+
           set((draft) => {
             draft.tasks = tasks
             draft.loading = false
@@ -100,7 +100,7 @@ export const useTaskStore = create<TaskStore>()(
             completedPomodoros: 0,
             isCompleted: false
           })
-          
+
           set((draft) => {
             draft.tasks.unshift(newTask)
             draft.loading = false
@@ -118,9 +118,9 @@ export const useTaskStore = create<TaskStore>()(
         try {
           const storage = StorageFactory.getAdapter()
           const updatedTask = await storage.tasks.update(id, updates)
-          
+
           set((draft) => {
-            const index = draft.tasks.findIndex(task => task.id === id)
+            const index = draft.tasks.findIndex((task) => task.id === id)
             if (index !== -1) {
               draft.tasks[index] = updatedTask
             }
@@ -137,9 +137,9 @@ export const useTaskStore = create<TaskStore>()(
         try {
           const storage = StorageFactory.getAdapter()
           await storage.tasks.delete(id)
-          
+
           set((draft) => {
-            draft.tasks = draft.tasks.filter(task => task.id !== id)
+            draft.tasks = draft.tasks.filter((task) => task.id !== id)
           })
         } catch (error) {
           set((draft) => {
@@ -156,9 +156,9 @@ export const useTaskStore = create<TaskStore>()(
             isCompleted: true,
             completedAt: new Date()
           })
-          
+
           set((draft) => {
-            const index = draft.tasks.findIndex(task => task.id === id)
+            const index = draft.tasks.findIndex((task) => task.id === id)
             if (index !== -1) {
               draft.tasks[index] = updatedTask
             }
@@ -180,9 +180,9 @@ export const useTaskStore = create<TaskStore>()(
           const updatedTask = await storage.tasks.update(id, {
             completedPomodoros: task.completedPomodoros + 1
           })
-          
+
           set((draft) => {
-            const index = draft.tasks.findIndex(task => task.id === id)
+            const index = draft.tasks.findIndex((task) => task.id === id)
             if (index !== -1) {
               draft.tasks[index] = updatedTask
             }
@@ -215,29 +215,27 @@ export const useTaskStore = create<TaskStore>()(
 
       // 选择器
       getTaskById: (id: string) => {
-        return get().tasks.find(task => task.id === id)
+        return get().tasks.find((task) => task.id === id)
       },
 
       getTasksByCategory: (category: string) => {
-        return get().tasks.filter(task => task.category === category)
+        return get().tasks.filter((task) => task.category === category)
       },
 
       getActiveTask: () => {
-        return get().tasks.find(task => !task.isCompleted && task.completedPomodoros > 0)
+        return get().tasks.find((task) => !task.isCompleted && task.completedPomodoros > 0)
       },
 
       // 批量操作
       deleteCompletedTasks: async () => {
-        const completedTasks = get().tasks.filter(task => task.isCompleted)
-        
+        const completedTasks = get().tasks.filter((task) => task.isCompleted)
+
         try {
           const storage = StorageFactory.getAdapter()
-          await Promise.all(
-            completedTasks.map(task => storage.tasks.delete(task.id))
-          )
-          
+          await Promise.all(completedTasks.map((task) => storage.tasks.delete(task.id)))
+
           set((draft) => {
-            draft.tasks = draft.tasks.filter(task => !task.isCompleted)
+            draft.tasks = draft.tasks.filter((task) => !task.isCompleted)
           })
         } catch (error) {
           set((draft) => {
@@ -247,21 +245,21 @@ export const useTaskStore = create<TaskStore>()(
       },
 
       markAllAsCompleted: async () => {
-        const incompleteTasks = get().tasks.filter(task => !task.isCompleted)
-        
+        const incompleteTasks = get().tasks.filter((task) => !task.isCompleted)
+
         try {
           const storage = StorageFactory.getAdapter()
           await Promise.all(
-            incompleteTasks.map(task => 
+            incompleteTasks.map((task) =>
               storage.tasks.update(task.id, {
                 isCompleted: true,
                 completedAt: new Date()
               })
             )
           )
-          
+
           set((draft) => {
-            draft.tasks.forEach(task => {
+            draft.tasks.forEach((task) => {
               if (!task.isCompleted) {
                 task.isCompleted = true
                 task.completedAt = new Date()
@@ -285,19 +283,17 @@ export const useTaskStore = create<TaskStore>()(
 
 // 优化的选择器 - 使用useMemo缓存结果
 export const useFilteredTasks = (): Task[] => {
-  const { tasks, filter, sortBy, sortOrder } = useTaskStore((state) => ({
-    tasks: state.tasks,
-    filter: state.filter,
-    sortBy: state.sortBy,
-    sortOrder: state.sortOrder
-  }))
+  const tasks = useTaskStore((state) => state.tasks)
+  const filter = useTaskStore((state) => state.filter)
+  const sortBy = useTaskStore((state) => state.sortBy)
+  const sortOrder = useTaskStore((state) => state.sortOrder)
 
   return useMemo(() => {
     let filteredTasks = [...tasks]
 
     // 应用过滤器
     if (filter !== 'all') {
-      filteredTasks = filteredTasks.filter(task => {
+      filteredTasks = filteredTasks.filter((task) => {
         switch (filter) {
           case 'completed':
             return task.isCompleted
@@ -335,20 +331,24 @@ export const useFilteredTasks = (): Task[] => {
 }
 
 export const useTaskStats = (): {
-  total: number;
-  completed: number;
-  inProgress: number;
-  pending: number;
-  totalPomodoros: number;
-  completionRate: number;
+  total: number
+  completed: number
+  inProgress: number
+  pending: number
+  totalPomodoros: number
+  completionRate: number
 } => {
   const tasks = useTaskStore((state) => state.tasks)
 
   return useMemo(() => {
     const total = tasks.length
-    const completed = tasks.filter(task => task.isCompleted).length
-    const inProgress = tasks.filter(task => !task.isCompleted && task.completedPomodoros > 0).length
-    const pending = tasks.filter(task => !task.isCompleted && task.completedPomodoros === 0).length
+    const completed = tasks.filter((task) => task.isCompleted).length
+    const inProgress = tasks.filter(
+      (task) => !task.isCompleted && task.completedPomodoros > 0
+    ).length
+    const pending = tasks.filter(
+      (task) => !task.isCompleted && task.completedPomodoros === 0
+    ).length
     const totalPomodoros = tasks.reduce((sum, task) => sum + task.completedPomodoros, 0)
 
     return {
@@ -360,4 +360,4 @@ export const useTaskStats = (): {
       completionRate: total > 0 ? (completed / total) * 100 : 0
     }
   }, [tasks])
-} 
+}

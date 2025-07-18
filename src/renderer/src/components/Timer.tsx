@@ -25,8 +25,8 @@ const CircularProgress: React.FC<CircularProgressProps> = ({
   const circumference = radius * 2 * Math.PI
   const strokeDashoffset = circumference - (progress / 100) * circumference
 
-  const strokeColor = mode === TimerMode.WORK ? '#ef4444' : 
-                     mode === TimerMode.SHORT_BREAK ? '#06b6d4' : '#8b5cf6'
+  const strokeColor =
+    mode === TimerMode.WORK ? '#ef4444' : mode === TimerMode.SHORT_BREAK ? '#06b6d4' : '#8b5cf6'
 
   return (
     <div className="relative" style={{ width: size, height: size }}>
@@ -40,7 +40,7 @@ const CircularProgress: React.FC<CircularProgressProps> = ({
           strokeWidth={strokeWidth}
           className="text-gray-200 dark:text-gray-700"
         />
-        
+
         <motion.circle
           cx={size / 2}
           cy={size / 2}
@@ -52,7 +52,7 @@ const CircularProgress: React.FC<CircularProgressProps> = ({
           strokeDasharray={circumference}
           strokeDashoffset={strokeDashoffset}
           animate={{ strokeDashoffset }}
-          transition={{ duration: isRunning ? 1 : 0.5, ease: "linear" }}
+          transition={{ duration: isRunning ? 1 : 0.5, ease: 'linear' }}
         />
       </svg>
     </div>
@@ -79,7 +79,8 @@ const ControlButton: React.FC<ControlButtonProps> = ({
     'inline-flex items-center justify-center rounded-full font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed',
     {
       'bg-primary-500 text-white hover:bg-primary-600': variant === 'primary',
-      'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300': variant === 'secondary',
+      'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300':
+        variant === 'secondary',
       'bg-red-100 text-red-700 hover:bg-red-200': variant === 'danger',
       'w-8 h-8 text-sm': size === 'sm',
       'w-12 h-12 text-base': size === 'md',
@@ -121,25 +122,34 @@ const Timer: React.FC = () => {
   const isInitialized = useRef(false)
 
   useEffect(() => {
-    if (!isInitialized.current) {
+    // 确保全局只初始化一次
+    if (!window.isTimerInitialized) {
       initialize()
+      window.isTimerInitialized = true
       isInitialized.current = true
     }
 
     return () => {
-      cleanup()
+      // 只在组件真正卸载时清理
+      if (isInitialized.current) {
+        cleanup()
+        isInitialized.current = false
+      }
     }
   }, []) // 空依赖数组，只在组件挂载时执行一次
 
   const progress = getProgress(timeLeft, totalTime)
   const formattedTime = formatTime(timeLeft)
 
-  const modeText = mode === TimerMode.WORK ? '专注工作' : 
-                   mode === TimerMode.SHORT_BREAK ? '短休息' : '长休息'
+  const modeText =
+    mode === TimerMode.WORK ? '专注工作' : mode === TimerMode.SHORT_BREAK ? '短休息' : '长休息'
 
-  const modeColor = mode === TimerMode.WORK ? 'bg-red-100 text-red-800' :
-                    mode === TimerMode.SHORT_BREAK ? 'bg-cyan-100 text-cyan-800' : 
-                    'bg-purple-100 text-purple-800'
+  const modeColor =
+    mode === TimerMode.WORK
+      ? 'bg-red-100 text-red-800'
+      : mode === TimerMode.SHORT_BREAK
+        ? 'bg-cyan-100 text-cyan-800'
+        : 'bg-purple-100 text-purple-800'
 
   const handlePlayPause = (): void => {
     if (isRunning) {
@@ -152,7 +162,12 @@ const Timer: React.FC = () => {
   return (
     <div className="flex flex-col items-center space-y-8 p-8">
       {/* 模式指示器 */}
-      <span className={clsx('inline-flex items-center px-3 py-1 rounded-full text-sm font-medium', modeColor)}>
+      <span
+        className={clsx(
+          'inline-flex items-center px-3 py-1 rounded-full text-sm font-medium',
+          modeColor
+        )}
+      >
         {modeText}
       </span>
 
@@ -165,7 +180,7 @@ const Timer: React.FC = () => {
           mode={mode}
           isRunning={isRunning}
         />
-        
+
         {/* 中心内容 */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <div className="text-6xl font-mono font-bold text-gray-900 dark:text-gray-100">
@@ -187,19 +202,12 @@ const Timer: React.FC = () => {
         >
           {isRunning ? <Pause size={24} /> : <Play size={24} />}
         </ControlButton>
-        
-        <ControlButton
-          onClick={stop}
-          variant="danger"
-          disabled={!isRunning && !isPaused}
-        >
+
+        <ControlButton onClick={stop} variant="danger" disabled={!isRunning && !isPaused}>
           <Square size={20} />
         </ControlButton>
-        
-        <ControlButton
-          onClick={reset}
-          disabled={isRunning}
-        >
+
+        <ControlButton onClick={reset} disabled={isRunning}>
           <RotateCcw size={20} />
         </ControlButton>
       </div>
@@ -212,4 +220,4 @@ const Timer: React.FC = () => {
   )
 }
 
-export default Timer 
+export default Timer

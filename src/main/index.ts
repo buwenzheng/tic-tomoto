@@ -1,11 +1,4 @@
-import { 
-  app, 
-  shell, 
-  BrowserWindow, 
-  ipcMain, 
-  globalShortcut,
-  Notification
-} from 'electron'
+import { app, shell, BrowserWindow, ipcMain, globalShortcut, Notification } from 'electron'
 import { join } from 'path'
 import { readFile, writeFile, existsSync, mkdirSync } from 'fs'
 import { promisify } from 'util'
@@ -23,11 +16,11 @@ const writeFileAsync = promisify(writeFile)
 const getUserDataPath = (): string => {
   const userDataPath = app.getPath('userData')
   const dataDir = join(userDataPath, 'tomato-data')
-  
+
   if (!existsSync(dataDir)) {
     mkdirSync(dataDir, { recursive: true })
   }
-  
+
   return dataDir
 }
 
@@ -45,7 +38,7 @@ class TimerWorker {
 
   start(intervalMs: number): void {
     this.stop() // 确保停止之前的计时器
-    
+
     this.interval = setInterval(() => {
       if (this.mainWindow && !this.mainWindow.isDestroyed()) {
         this.mainWindow.webContents.send('timer:tick')
@@ -91,7 +84,7 @@ function createWindow(): void {
     visualEffectState: 'active',
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: join(__dirname, '../preload/index.mjs'),
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false,
@@ -105,7 +98,7 @@ function createWindow(): void {
   mainWindow.on('ready-to-show', () => {
     if (mainWindow) {
       mainWindow.show()
-      
+
       // 开发模式下打开开发者工具
       if (is.dev) {
         mainWindow.webContents.openDevTools()
@@ -219,25 +212,31 @@ function setupIpcHandlers(): void {
   })
 
   // 系统API
-  ipcMain.on('system:showNotification', (_, options: {
-    title: string
-    body: string
-    icon?: string
-    silent?: boolean
-    urgency?: 'normal' | 'critical' | 'low'
-  }) => {
-    try {
-      const notification = new Notification({
-        title: options.title,
-        body: options.body,
-        icon: options.icon,
-        silent: options.silent
-      })
-      notification.show()
-    } catch (error) {
-      console.error('Error showing notification:', error)
+  ipcMain.on(
+    'system:showNotification',
+    (
+      _,
+      options: {
+        title: string
+        body: string
+        icon?: string
+        silent?: boolean
+        urgency?: 'normal' | 'critical' | 'low'
+      }
+    ) => {
+      try {
+        const notification = new Notification({
+          title: options.title,
+          body: options.body,
+          icon: options.icon,
+          silent: options.silent
+        })
+        notification.show()
+      } catch (error) {
+        console.error('Error showing notification:', error)
+      }
     }
-  })
+  )
 
   ipcMain.on('system:registerGlobalShortcut', (_, accelerator: string, channelId: string) => {
     try {
@@ -366,7 +365,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   // 清理全局快捷键
   globalShortcut.unregisterAll()
-  
+
   if (process.platform !== 'darwin') {
     app.quit()
   }
@@ -384,11 +383,11 @@ app.on('before-quit', () => {
 app.on('web-contents-created', (_, contents) => {
   contents.setWindowOpenHandler(({ url }) => {
     const parsedUrl = new URL(url)
-    
+
     if (parsedUrl.origin !== 'https://electron-vite.org') {
       return { action: 'deny' }
     }
-    
+
     return { action: 'allow' }
   })
 })
@@ -397,7 +396,7 @@ app.on('web-contents-created', (_, contents) => {
 app.on('web-contents-created', (_, contents) => {
   contents.on('will-navigate', (event, navigationUrl) => {
     const parsedUrl = new URL(navigationUrl)
-    
+
     if (parsedUrl.origin !== contents.getURL()) {
       event.preventDefault()
     }

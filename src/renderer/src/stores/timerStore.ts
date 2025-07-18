@@ -88,7 +88,7 @@ export const useTimerStore = create<TimerStore>()(
       reset: () => {
         const state = get()
         const newTime = getTimeForMode(state.mode)
-        
+
         set((draft) => {
           draft.isRunning = false
           draft.isPaused = false
@@ -111,7 +111,7 @@ export const useTimerStore = create<TimerStore>()(
 
       completeSession: () => {
         const state = get()
-        
+
         set((draft) => {
           if (draft.mode === TimerMode.WORK) {
             draft.currentSession += 1
@@ -140,7 +140,7 @@ export const useTimerStore = create<TimerStore>()(
               set((draft) => {
                 draft.timeLeft = newTimeLeft
               })
-              
+
               // 使用新的时间值检查是否结束
               if (newTimeLeft <= 0) {
                 // 延迟执行，避免状态冲突
@@ -177,19 +177,9 @@ export const getProgress = (timeLeft: number, totalTime: number): number => {
 
 // 选择器Hook - 避免重复计算
 export const useTimerProgress = (): number => {
-  return useTimerStore(
-    useCallback(
-      (state) => getProgress(state.timeLeft, state.totalTime),
-      []
-    )
-  )
+  return useTimerStore(useCallback((state) => getProgress(state.timeLeft, state.totalTime), []))
 }
 
 export const useFormattedTime = (): string => {
-  return useTimerStore(
-    useCallback(
-      (state) => formatTime(state.timeLeft),
-      []
-    )
-  )
-} 
+  return useTimerStore(useCallback((state) => formatTime(state.timeLeft), []))
+}

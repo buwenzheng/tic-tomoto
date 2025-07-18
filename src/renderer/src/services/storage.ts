@@ -58,7 +58,7 @@ const defaultSettings: AppSettings = {
 // Repository实现类
 class LocalTaskRepository implements TaskRepository {
   constructor(
-    private db: { data: { tasks: Task[] }; read: () => Promise<void>; write: () => Promise<void> }
+    protected db: { data: { tasks: Task[] }; read: () => Promise<void>; write: () => Promise<void> }
   ) {}
 
   async getAll(): Promise<Task[]> {
@@ -209,7 +209,7 @@ export class LocalStorageAdapter implements StorageAdapter {
   public settings: SettingsRepository
 
   constructor(
-    private db: { data: { tasks: Task[] }; read: () => Promise<void>; write: () => Promise<void> }
+    protected db: { data: { tasks: Task[] }; read: () => Promise<void>; write: () => Promise<void> }
   ) {
     this.tasks = new LocalTaskRepository(db)
     this.stats = new MockStatsRepository()

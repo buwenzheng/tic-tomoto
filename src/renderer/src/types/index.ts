@@ -57,15 +57,15 @@ export enum TimerMode {
 }
 
 export interface TimerSettings {
-  workDuration: number      // 工作时长 (分钟)
+  workDuration: number // 工作时长 (分钟)
   shortBreakDuration: number // 短休息时长 (分钟)
-  longBreakDuration: number  // 长休息时长 (分钟)
-  longBreakInterval: number  // 长休息间隔 (几个番茄后)
-  autoStartBreaks: boolean   // 自动开始休息
-  autoStartWork: boolean     // 自动开始工作
-  tickSound: boolean         // 滴答声
+  longBreakDuration: number // 长休息时长 (分钟)
+  longBreakInterval: number // 长休息间隔 (几个番茄后)
+  autoStartBreaks: boolean // 自动开始休息
+  autoStartWork: boolean // 自动开始工作
+  tickSound: boolean // 滴答声
   notificationSound: boolean // 通知声音
-  strictMode: boolean        // 严格模式
+  strictMode: boolean // 严格模式
 }
 
 // ===============================
@@ -143,7 +143,7 @@ export interface DailyStats {
   completedTasks: number
   totalFocusTime: number // 秒
   totalBreakTime: number // 秒
-  productivity: number   // 0-100
+  productivity: number // 0-100
   tags: TagStats[]
 }
 
@@ -340,4 +340,4 @@ export type Optional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>
 export type RequiredFields<T, K extends keyof T> = T & Required<Pick<T, K>>
 export type DeepPartial<T> = {
   [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P]
-} 
+}

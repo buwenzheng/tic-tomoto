@@ -11,7 +11,12 @@ export default defineConfig({
   },
   preload: {
     build: {
-      outDir: 'out/preload'
+      outDir: 'out/preload',
+      rollupOptions: {
+        output: {
+          entryFileNames: '[name].js'
+        }
+      }
     },
     plugins: [externalizeDepsPlugin()]
   },
@@ -24,3 +29,4 @@ export default defineConfig({
     plugins: [react()]
   }
 })
+ 

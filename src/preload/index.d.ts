@@ -26,8 +26,8 @@ interface TomatoAPI {
   // 系统API
   system: {
     showNotification: (
-      title: string, 
-      body: string, 
+      title: string,
+      body: string,
       options?: {
         icon?: string
         silent?: boolean

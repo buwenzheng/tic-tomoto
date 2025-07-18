@@ -1,28 +1,28 @@
 import type { RouteObject } from 'react-router-dom'
 import { TimerPage, TasksPage, StatsPage, SettingsPage } from '@/pages'
 
-export type RouteConfig = Omit<RouteObject, 'children'> & {
+export type RouteConfig = RouteObject & {
   title: string
 }
 
 export const routes: RouteConfig[] = [
   {
-    path: '/timer',
+    path: 'timer',
     element: <TimerPage />,
     title: '番茄钟'
   },
   {
-    path: '/tasks',
+    path: 'tasks',
     element: <TasksPage />,
     title: '任务'
   },
   {
-    path: '/stats',
+    path: 'stats',
     element: <StatsPage />,
     title: '统计'
   },
   {
-    path: '/settings',
+    path: 'settings',
     element: <SettingsPage />,
     title: '设置'
   }

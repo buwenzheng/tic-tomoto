@@ -16,7 +16,7 @@ const tomatoAPI = {
         return null
       }
     },
-    
+
     saveData: async (filename: string, data: string): Promise<boolean> => {
       try {
         return await ipcRenderer.invoke('fs:saveData', filename, data)
@@ -69,11 +69,15 @@ const tomatoAPI = {
 
   // 系统API - 通知和快捷键
   system: {
-    showNotification: (title: string, body: string, options?: {
-      icon?: string;
-      silent?: boolean;
-      urgency?: 'normal' | 'critical' | 'low';
-    }): void => {
+    showNotification: (
+      title: string,
+      body: string,
+      options?: {
+        icon?: string
+        silent?: boolean
+        urgency?: 'normal' | 'critical' | 'low'
+      }
+    ): void => {
       ipcRenderer.send('system:showNotification', { title, body, ...options })
     },
 

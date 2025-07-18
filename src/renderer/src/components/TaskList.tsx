@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Edit2, Trash2, Play, CheckCircle2, Circle, Filter } from 'lucide-react'
 import { TaskPriority } from '@/types'
@@ -6,6 +6,7 @@ import type { Task, TaskFormData } from '@/types'
 import { useTaskStore, useFilteredTasks, useTaskStats } from '@/stores/taskStore'
 import { useTimerStore } from '@/stores/timerStore'
 import clsx from 'clsx'
+import { useNavigate } from 'react-router-dom'
 
 // 任务项组件
 interface TaskItemProps {
@@ -61,19 +62,17 @@ const TaskItem: React.FC<TaskItemProps> = ({
         {/* 任务内容 */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center space-x-2">
-            <h3 
+            <h3
               className={clsx(
                 'font-medium truncate',
-                task.isCompleted 
-                  ? 'text-gray-500 line-through' 
-                  : 'text-gray-900 dark:text-gray-100'
+                task.isCompleted ? 'text-gray-500 line-through' : 'text-gray-900 dark:text-gray-100'
               )}
             >
               {task.title}
             </h3>
-            
+
             {/* 优先级标签 */}
-            <span 
+            <span
               className={clsx(
                 'text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800',
                 priorityColors[task.priority]
@@ -82,13 +81,13 @@ const TaskItem: React.FC<TaskItemProps> = ({
               {priorityLabels[task.priority]}
             </span>
           </div>
-          
+
           {task.description && (
             <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-1">
               {task.description}
             </p>
           )}
-          
+
           {/* 番茄进度 */}
           <div className="flex items-center space-x-2 mt-2">
             <div className="flex items-center space-x-1">
@@ -97,13 +96,13 @@ const TaskItem: React.FC<TaskItemProps> = ({
                 {task.completedPomodoros} / {task.estimatedPomodoros}
               </span>
             </div>
-            
+
             {/* 进度条 */}
             <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 max-w-24">
-              <div 
+              <div
                 className="bg-primary-500 h-1.5 rounded-full transition-all duration-300"
-                style={{ 
-                  width: `${Math.min((task.completedPomodoros / task.estimatedPomodoros) * 100, 100)}%` 
+                style={{
+                  width: `${Math.min((task.completedPomodoros / task.estimatedPomodoros) * 100, 100)}%`
                 }}
               />
             </div>
@@ -121,7 +120,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
               <Play className="w-4 h-4" />
             </button>
           )}
-          
+
           <button
             onClick={() => onEdit(task)}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded text-gray-600 dark:text-gray-400"
@@ -129,7 +128,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
           >
             <Edit2 className="w-4 h-4" />
           </button>
-          
+
           <button
             onClick={() => onDelete(task.id)}
             className="p-2 hover:bg-red-50 dark:hover:bg-red-900 rounded text-red-600 dark:text-red-400"
@@ -201,10 +200,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, isOpen, onClose, onSubmit }) 
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
       >
-        <h2 className="text-lg font-semibold mb-4">
-          {task ? '编辑任务' : '新建任务'}
-        </h2>
-        
+        <h2 className="text-lg font-semibold mb-4">{task ? '编辑任务' : '新建任务'}</h2>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-2">任务标题 *</label>
@@ -217,7 +214,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, isOpen, onClose, onSubmit }) 
               required
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium mb-2">任务描述</label>
             <textarea
@@ -227,13 +224,15 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, isOpen, onClose, onSubmit }) 
               placeholder="输入任务描述"
             />
           </div>
-          
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-2">优先级</label>
               <select
                 value={formData.priority}
-                onChange={(e) => setFormData({ ...formData, priority: e.target.value as TaskPriority })}
+                onChange={(e) =>
+                  setFormData({ ...formData, priority: e.target.value as TaskPriority })
+                }
                 className="input"
               >
                 <option value={TaskPriority.LOW}>低优先级</option>
@@ -242,7 +241,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, isOpen, onClose, onSubmit }) 
                 <option value={TaskPriority.URGENT}>紧急</option>
               </select>
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium mb-2">预估番茄数</label>
               <input
@@ -250,24 +249,19 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, isOpen, onClose, onSubmit }) 
                 min="1"
                 max="20"
                 value={formData.estimatedPomodoros}
-                onChange={(e) => setFormData({ ...formData, estimatedPomodoros: parseInt(e.target.value) || 1 })}
+                onChange={(e) =>
+                  setFormData({ ...formData, estimatedPomodoros: parseInt(e.target.value) || 1 })
+                }
                 className="input"
               />
             </div>
           </div>
-          
+
           <div className="flex justify-end space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="btn-ghost"
-            >
+            <button type="button" onClick={onClose} className="btn-ghost">
               取消
             </button>
-            <button
-              type="submit"
-              className="btn-primary"
-            >
+            <button type="submit" className="btn-primary">
               {task ? '更新' : '创建'}
             </button>
           </div>
@@ -281,7 +275,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, isOpen, onClose, onSubmit }) 
 const TaskList: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | undefined>()
-  
+
   const {
     loading,
     error,
@@ -293,20 +287,19 @@ const TaskList: React.FC = () => {
     completeTask,
     initialize
   } = useTaskStore()
-  
+
   const { setCurrentTask } = useTimerStore()
   const filteredTasks = useFilteredTasks()
   const stats = useTaskStats()
-
-  // 使用ref避免重复初始化
-  const isInitialized = useRef(false)
+  const navigate = useNavigate()
 
   useEffect(() => {
-    if (!isInitialized.current) {
+    // 使用全局标记避免重复初始化
+    if (!window.isTaskStoreInitialized) {
       initialize()
-      isInitialized.current = true
+      window.isTaskStoreInitialized = true
     }
-  }, []) // 空依赖数组
+  }, [initialize])
 
   const handleCreateTask = async (data: TaskFormData): Promise<void> => {
     await createTask(data)
@@ -326,7 +319,7 @@ const TaskList: React.FC = () => {
 
   const handleStartPomodoro = (taskId: string): void => {
     setCurrentTask(taskId)
-    // 这里可以添加切换到计时器页面的逻辑
+    navigate('timer')
   }
 
   const handleToggleComplete = async (taskId: string): Promise<void> => {
@@ -344,18 +337,11 @@ const TaskList: React.FC = () => {
       {/* 头部 */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            任务列表
-          </h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">
-            管理你的番茄钟任务
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">任务列表</h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">管理你的番茄钟任务</p>
         </div>
-        
-        <button
-          onClick={() => setIsFormOpen(true)}
-          className="btn-primary"
-        >
+
+        <button onClick={() => setIsFormOpen(true)} className="btn-primary">
           <Plus className="w-4 h-4 mr-2" />
           新建任务
         </button>
@@ -396,9 +382,13 @@ const TaskList: React.FC = () => {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400'
               )}
             >
-              {filterType === 'all' ? '全部' :
-               filterType === 'pending' ? '待开始' :
-               filterType === 'in-progress' ? '进行中' : '已完成'}
+              {filterType === 'all'
+                ? '全部'
+                : filterType === 'pending'
+                  ? '待开始'
+                  : filterType === 'in-progress'
+                    ? '进行中'
+                    : '已完成'}
             </button>
           ))}
         </div>
@@ -411,19 +401,15 @@ const TaskList: React.FC = () => {
             <div className="shimmer w-full h-20 rounded"></div>
           </div>
         )}
-        
-        {error && (
-          <div className="p-4 text-red-600 dark:text-red-400 text-center">
-            {error}
-          </div>
-        )}
-        
+
+        {error && <div className="p-4 text-red-600 dark:text-red-400 text-center">{error}</div>}
+
         {!loading && !error && filteredTasks.length === 0 && (
           <div className="p-8 text-center text-gray-500 dark:text-gray-400">
             {filter === 'all' ? '还没有任务，创建一个开始吧！' : '没有符合条件的任务'}
           </div>
         )}
-        
+
         <AnimatePresence>
           {filteredTasks.map((task) => (
             <TaskItem
@@ -454,4 +440,4 @@ const TaskList: React.FC = () => {
   )
 }
 
-export default TaskList 
+export default TaskList
