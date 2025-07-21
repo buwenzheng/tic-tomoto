@@ -1,7 +1,7 @@
 {
-  "name": "electron-app",
-  "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
+  "name": "tic-tomoto",
+  "version": "0.1.0",
+  "description": "A feature-rich Pomodoro Timer application",
   "type": "module",
   "main": "./out/main/index.js",
   "author": "example@example.com",
