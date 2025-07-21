@@ -68,6 +68,9 @@ interface TomatoAPI {
     reloadWindow: () => void
     toggleDevTools: () => void
   }
+
+  // 平台信息
+  platform: string
 }
 
 interface Window {

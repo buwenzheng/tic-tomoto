@@ -1,215 +1,69 @@
 import { contextBridge, ipcRenderer } from 'electron'
-// 修改导入方式，避免 ESM 导入问题
 import { electronAPI } from '@electron-toolkit/preload'
 
-// ===============================
-// 番茄钟应用API定义
-// ===============================
-
+// 自定义API
 const tomatoAPI = {
-  // 文件系统API - 数据持久化
   fs: {
-    readData: async (filename: string): Promise<string | null> => {
-      try {
-        return await ipcRenderer.invoke('fs:readData', filename)
-      } catch (error) {
-        console.error('Failed to read data:', error)
-        return null
-      }
-    },
-
-    saveData: async (filename: string, data: string): Promise<boolean> => {
-      try {
-        return await ipcRenderer.invoke('fs:saveData', filename, data)
-      } catch (error) {
-        console.error('Failed to save data:', error)
-        return false
-      }
-    },
-
-    checkFileExists: async (filename: string): Promise<boolean> => {
-      try {
-        return await ipcRenderer.invoke('fs:checkFileExists', filename)
-      } catch (error) {
-        console.error('Failed to check file exists:', error)
-        return false
-      }
-    },
-
-    getUserDataPath: async (): Promise<string> => {
-      try {
-        return await ipcRenderer.invoke('fs:getUserDataPath')
-      } catch (error) {
-        console.error('Failed to get user data path:', error)
-        return ''
-      }
-    }
+    readData: (filename: string) => ipcRenderer.invoke('fs:readData', filename),
+    saveData: (filename: string, data: string) => ipcRenderer.invoke('fs:saveData', filename, data),
+    checkFileExists: (filename: string) => ipcRenderer.invoke('fs:checkFileExists', filename),
+    getUserDataPath: () => ipcRenderer.invoke('fs:getUserDataPath')
   },
-
-  // 数据库API - 安全的数据库访问
   db: {
-    read: async (): Promise<any> => {
-      try {
-        return await ipcRenderer.invoke('db:read')
-      } catch (error) {
-        console.error('Failed to read database:', error)
-        throw error
-      }
-    },
-
-    write: async (data: any): Promise<boolean> => {
-      try {
-        return await ipcRenderer.invoke('db:write', data)
-      } catch (error) {
-        console.error('Failed to write to database:', error)
-        throw error
-      }
-    }
+    read: () => ipcRenderer.invoke('db:read'),
+    write: (data: any) => ipcRenderer.invoke('db:write', data)
   },
-
-  // 窗口控制API - 严格模式支持
   window: {
-    setAlwaysOnTop: (alwaysOnTop: boolean): void => {
-      ipcRenderer.send('window:setAlwaysOnTop', alwaysOnTop)
-    },
-
-    minimize: (): void => {
-      ipcRenderer.send('window:minimize')
-    },
-
-    hide: (): void => {
-      ipcRenderer.send('window:hide')
-    },
-
-    show: (): void => {
-      ipcRenderer.send('window:show')
-    },
-
-    focus: (): void => {
-      ipcRenderer.send('window:focus')
-    },
-
-    setSize: (width: number, height: number): void => {
-      ipcRenderer.send('window:setSize', width, height)
-    },
-
-    center: (): void => {
-      ipcRenderer.send('window:center')
-    },
-
-    maximize: (): void => {
-      ipcRenderer.send('window:maximize')
-    },
-
-    unmaximize: (): void => {
-      ipcRenderer.send('window:unmaximize')
-    },
-
-    isMaximized: async (): Promise<boolean> => {
-      return await ipcRenderer.invoke('window:isMaximized')
-    },
-
-    close: (): void => {
-      ipcRenderer.send('window:close')
-    }
+    setAlwaysOnTop: (alwaysOnTop: boolean) => ipcRenderer.send('window:setAlwaysOnTop', alwaysOnTop),
+    minimize: () => ipcRenderer.send('window:minimize'),
+    hide: () => ipcRenderer.send('window:hide'),
+    show: () => ipcRenderer.send('window:show'),
+    focus: () => ipcRenderer.send('window:focus'),
+    setSize: (width: number, height: number) =>
+      ipcRenderer.send('window:setSize', width, height),
+    center: () => ipcRenderer.send('window:center'),
+    maximize: () => ipcRenderer.send('window:maximize'),
+    unmaximize: () => ipcRenderer.send('window:unmaximize'),
+    isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+    close: () => ipcRenderer.send('window:close')
   },
-
-  // 系统API - 通知和快捷键
   system: {
     showNotification: (
       title: string,
       body: string,
-      options?: {
-        icon?: string
-        silent?: boolean
-        urgency?: 'normal' | 'critical' | 'low'
-      }
-    ): void => {
-      ipcRenderer.send('system:showNotification', { title, body, ...options })
-    },
-
-    registerGlobalShortcut: (accelerator: string, callback: () => void): void => {
-      const channelId = `shortcut:${accelerator}`
-      ipcRenderer.removeAllListeners(channelId)
-      ipcRenderer.on(channelId, callback)
-      ipcRenderer.send('system:registerGlobalShortcut', accelerator, channelId)
-    },
-
-    unregisterGlobalShortcut: (accelerator: string): void => {
-      ipcRenderer.send('system:unregisterGlobalShortcut', accelerator)
-    },
-
-    unregisterAllShortcuts: (): void => {
-      ipcRenderer.send('system:unregisterAllShortcuts')
-    },
-
-    playSound: (soundPath: string, volume: number = 1.0): void => {
+      options?: { icon?: string; silent?: boolean; urgency?: 'normal' | 'critical' | 'low' }
+    ) => ipcRenderer.send('system:showNotification', { title, body, ...options }),
+    registerGlobalShortcut: (accelerator: string, channelId: string) =>
+      ipcRenderer.send('system:registerGlobalShortcut', accelerator, channelId),
+    unregisterGlobalShortcut: (accelerator: string) =>
+      ipcRenderer.send('system:unregisterGlobalShortcut', accelerator),
+    unregisterAllShortcuts: () => ipcRenderer.send('system:unregisterAllShortcuts'),
+    playSound: (soundPath: string, volume?: number) =>
       ipcRenderer.send('system:playSound', soundPath, volume)
-    }
   },
-
-  // 计时器API - 精确计时
   timer: {
-    startWorker: (intervalMs: number): void => {
-      ipcRenderer.send('timer:startWorker', intervalMs)
-    },
-
-    stopWorker: (): void => {
-      ipcRenderer.send('timer:stopWorker')
-    },
-
-    onTick: (callback: () => void): void => {
-      ipcRenderer.removeAllListeners('timer:tick')
-      ipcRenderer.on('timer:tick', callback)
-    },
-
-    offTick: (): void => {
-      ipcRenderer.removeAllListeners('timer:tick')
-    }
+    startWorker: (intervalMs: number) => ipcRenderer.send('timer:startWorker', intervalMs),
+    stopWorker: () => ipcRenderer.send('timer:stopWorker'),
+    onTick: (callback: () => void) => ipcRenderer.on('timer:tick', callback),
+    offTick: () => ipcRenderer.removeAllListeners('timer:tick')
   },
-
-  // 应用生命周期API
   app: {
-    getVersion: async (): Promise<string> => {
-      return await ipcRenderer.invoke('app:getVersion')
-    },
-
-    quit: (): void => {
-      ipcRenderer.send('app:quit')
-    },
-
-    restart: (): void => {
-      ipcRenderer.send('app:restart')
-    },
-
-    setLaunchOnStartup: (enable: boolean): void => {
-      ipcRenderer.send('app:setLaunchOnStartup', enable)
-    },
-
-    isLaunchOnStartup: async (): Promise<boolean> => {
-      return await ipcRenderer.invoke('app:isLaunchOnStartup')
-    }
+    getVersion: () => ipcRenderer.invoke('app:getVersion'),
+    quit: () => ipcRenderer.send('app:quit'),
+    restart: () => ipcRenderer.send('app:restart'),
+    setLaunchOnStartup: (enable: boolean) => ipcRenderer.send('app:setLaunchOnStartup', enable),
+    isLaunchOnStartup: () => ipcRenderer.invoke('app:isLaunchOnStartup')
   },
-
-  // 开发者API
   dev: {
-    openDevTools: (): void => {
-      ipcRenderer.send('dev:openDevTools')
-    },
-
-    reloadWindow: (): void => {
-      ipcRenderer.send('dev:reloadWindow')
-    },
-
-    toggleDevTools: (): void => {
-      ipcRenderer.send('dev:toggleDevTools')
-    }
-  }
+    openDevTools: () => ipcRenderer.send('dev:openDevTools'),
+    reloadWindow: () => ipcRenderer.send('dev:reloadWindow'),
+    toggleDevTools: () => ipcRenderer.send('dev:toggleDevTools')
+  },
+  // 添加平台信息
+  platform: process.platform
 }
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
+// 使用contextBridge暴露API
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)

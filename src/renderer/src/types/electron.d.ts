@@ -57,6 +57,7 @@ declare global {
         reloadWindow: () => void
         toggleDevTools: () => void
       }
+      platform: string // 添加平台信息
     }
     electron: any
   }

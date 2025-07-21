@@ -226,9 +226,16 @@ function createWindow(): void {
     minHeight: 500,
     show: false,
     autoHideMenuBar: true,
-    frame: false, // 完全隐藏系统标题栏
-    titleBarStyle: 'hidden', // 隐藏标题栏
-    title: '番茄时钟', // 设置窗口标题
+    // 根据平台使用不同的标题栏样式
+    ...(process.platform === 'darwin'
+      ? {
+          titleBarStyle: 'hiddenInset', // macOS下使用hiddenInset
+          trafficLightPosition: { x: 20, y: 20 }, // 调整红绿灯按钮位置
+        }
+      : {
+          frame: false, // Windows/Linux下完全自定义框架
+        }),
+    title: '番茄时钟',
     vibrancy: 'under-window',
     visualEffectState: 'active',
     ...(process.platform === 'linux' ? { icon } : {}),

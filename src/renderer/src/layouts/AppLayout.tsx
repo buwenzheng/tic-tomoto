@@ -33,11 +33,9 @@ const ThemeToggle: React.FC = memo(() => {
       document.documentElement.classList.remove('dark')
       localStorage.setItem('theme', 'light')
     }
-    console.log('Theme toggle clicked, current isDark:', isDark)
   }, [isDark])
 
   const toggleTheme = (): void => {
-    console.log('Theme toggle clicked, current isDark:', isDark)
     setIsDark(!isDark)
   }
 
@@ -121,18 +119,42 @@ WindowControls.displayName = 'WindowControls'
 
 // 顶部标题栏组件
 const TitleBar: React.FC = memo(() => {
+  const isMacOS = window.tomatoAPI?.platform === 'darwin'
+
   return (
-    <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-      <div className="flex items-center space-x-3 flex-1 drag-region">
+    <div 
+      className={clsx(
+        "flex items-center bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700",
+        // macOS下调整左右padding，右侧padding减小以减少空白
+        isMacOS ? "px-[70px] py-2" : "px-4 py-2"
+      )}
+    >
+      {/* Logo和标题区域 */}
+      <div className={clsx(
+        "flex items-center space-x-3 drag-region",
+        // 在macOS上让Logo区域居中，在其他平台上靠左对齐
+        isMacOS ? "flex-1 justify-center" : "flex-1"
+      )}>
         <div className="w-6 h-6 bg-gradient-to-br from-red-500 to-orange-500 rounded flex items-center justify-center">
           <span className="text-white text-sm">🍅</span>
         </div>
         <span className="text-sm font-medium text-gray-900 dark:text-gray-100">番茄时钟</span>
       </div>
       
-      <div className="flex items-center space-x-2">
-        <ThemeToggle />
-        <WindowControls />
+      {/* 控制按钮区域 */}
+      <div className={clsx(
+        "flex items-center",
+        isMacOS ? "space-x-1" : "space-x-2"
+      )}>
+        {/* 在macOS上，主题切换按钮不需要额外的右边距 */}
+        {isMacOS ? (
+          <ThemeToggle />
+        ) : (
+          <>
+            <ThemeToggle />
+            <WindowControls />
+          </>
+        )}
       </div>
     </div>
   )
