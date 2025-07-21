@@ -220,7 +220,7 @@ const Timer: React.FC = () => {
       {currentSession > 0 && (
         <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
           已完成 {currentSession} 个番茄钟
-        </div>
+      </div>
       )}
     </div>
   )
