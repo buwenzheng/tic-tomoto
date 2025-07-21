@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Edit2, Trash2, Play, CheckCircle2, Circle, Filter } from 'lucide-react'
+import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion'
+import { Plus, Edit2, Trash2, Play, CheckCircle2, Circle, Filter, GripVertical } from 'lucide-react'
 import { TaskPriority } from '@/types'
 import type { Task, TaskFormData } from '@/types'
 import { useTaskStore, useFilteredTasks, useTaskStats } from '@/stores/taskStore'
@@ -15,6 +15,7 @@ interface TaskItemProps {
   onDelete: (id: string) => void
   onToggleComplete: (id: string) => void
   onStartPomodoro: (id: string) => void
+  isDragging?: boolean
 }
 
 const TaskItem: React.FC<TaskItemProps> = ({
@@ -22,123 +23,113 @@ const TaskItem: React.FC<TaskItemProps> = ({
   onEdit,
   onDelete,
   onToggleComplete,
-  onStartPomodoro
+  onStartPomodoro,
+  isDragging
 }) => {
+  const dragControls = useDragControls()
+  
   const priorityColors = {
-    [TaskPriority.LOW]: 'text-gray-500',
-    [TaskPriority.MEDIUM]: 'text-yellow-500',
-    [TaskPriority.HIGH]: 'text-orange-500',
-    [TaskPriority.URGENT]: 'text-red-500'
-  }
-
-  const priorityLabels = {
-    [TaskPriority.LOW]: '低',
-    [TaskPriority.MEDIUM]: '中',
-    [TaskPriority.HIGH]: '高',
-    [TaskPriority.URGENT]: '急'
+    [TaskPriority.LOW]: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+    [TaskPriority.MEDIUM]: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
+    [TaskPriority.HIGH]: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200',
+    [TaskPriority.URGENT]: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
   }
 
   return (
-    <motion.div
-      className="task-item group"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.2 }}
+    <Reorder.Item
+      value={task}
+      className={clsx(
+        'group flex items-center gap-4 p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-colors',
+        isDragging ? 'shadow-lg' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+      )}
+      dragListener={false}
+      dragControls={dragControls}
     >
-      <div className="flex items-center space-x-3">
-        {/* 完成状态 */}
-        <button
-          onClick={() => onToggleComplete(task.id)}
-          className="flex-shrink-0 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
+      <button
+        className="cursor-grab active:cursor-grabbing text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400"
+        onPointerDown={(e) => {
+          e.preventDefault()
+          dragControls.start(e)
+        }}
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
+
+      <button
+        onClick={() => onToggleComplete(task.id)}
+        className={clsx(
+          'flex-shrink-0 w-6 h-6 rounded-full border-2 transition-colors',
+          task.isCompleted
+            ? 'border-green-500 bg-green-500 text-white hover:bg-green-600 hover:border-green-600'
+            : 'border-gray-300 hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-500'
+        )}
+      >
+        {task.isCompleted ? (
+          <CheckCircle2 className="w-5 h-5" />
+        ) : (
+          <Circle className="w-5 h-5 opacity-0 group-hover:opacity-100" />
+        )}
+      </button>
+
+      <div className="flex-1 min-w-0">
+        <h3
+          className={clsx('text-base font-medium truncate', {
+            'text-gray-900 dark:text-gray-100': !task.isCompleted,
+            'text-gray-500 dark:text-gray-400 line-through': task.isCompleted
+          })}
         >
-          {task.isCompleted ? (
-            <CheckCircle2 className="w-5 h-5 text-green-500" />
-          ) : (
-            <Circle className="w-5 h-5 text-gray-400" />
-          )}
-        </button>
-
-        {/* 任务内容 */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center space-x-2">
-            <h3
-              className={clsx(
-                'font-medium truncate',
-                task.isCompleted ? 'text-gray-500 line-through' : 'text-gray-900 dark:text-gray-100'
-              )}
-            >
-              {task.title}
-            </h3>
-
-            {/* 优先级标签 */}
-            <span
-              className={clsx(
-                'text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800',
-                priorityColors[task.priority]
-              )}
-            >
-              {priorityLabels[task.priority]}
+          {task.title}
+        </h3>
+        {task.description && (
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 line-clamp-2">
+            {task.description}
+          </p>
+        )}
+        <div className="flex items-center gap-2 mt-2">
+          <span
+            className={clsx(
+              'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
+              priorityColors[task.priority]
+            )}
+          >
+            {task.priority}
+          </span>
+          {task.category && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">
+              {task.category}
             </span>
-          </div>
-
-          {task.description && (
-            <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-1">
-              {task.description}
-            </p>
           )}
-
-          {/* 番茄进度 */}
-          <div className="flex items-center space-x-2 mt-2">
-            <div className="flex items-center space-x-1">
-              <span className="text-xs text-gray-500">🍅</span>
-              <span className="text-xs text-gray-600 dark:text-gray-400">
-                {task.completedPomodoros} / {task.estimatedPomodoros}
-              </span>
-            </div>
-
-            {/* 进度条 */}
-            <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 max-w-24">
-              <div
-                className="bg-primary-500 h-1.5 rounded-full transition-all duration-300"
-                style={{
-                  width: `${Math.min((task.completedPomodoros / task.estimatedPomodoros) * 100, 100)}%`
-                }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* 操作按钮 */}
-        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          {!task.isCompleted && (
-            <button
-              onClick={() => onStartPomodoro(task.id)}
-              className="p-2 hover:bg-primary-50 dark:hover:bg-primary-900 rounded text-primary-600 dark:text-primary-400"
-              title="开始番茄钟"
-            >
-              <Play className="w-4 h-4" />
-            </button>
-          )}
-
-          <button
-            onClick={() => onEdit(task)}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded text-gray-600 dark:text-gray-400"
-            title="编辑"
-          >
-            <Edit2 className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={() => onDelete(task.id)}
-            className="p-2 hover:bg-red-50 dark:hover:bg-red-900 rounded text-red-600 dark:text-red-400"
-            title="删除"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <span className="inline-flex items-center text-xs text-gray-500 dark:text-gray-400">
+            {task.completedPomodoros}/{task.estimatedPomodoros} 番茄钟
+          </span>
         </div>
       </div>
-    </motion.div>
+
+      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={() => onStartPomodoro(task.id)}
+          className="p-2 text-green-600 hover:bg-green-100 rounded dark:text-green-400 dark:hover:bg-green-900/50"
+          title="开始番茄钟"
+          disabled={task.isCompleted}
+        >
+          <Play className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => onEdit(task)}
+          className="p-2 text-blue-600 hover:bg-blue-100 rounded dark:text-blue-400 dark:hover:bg-blue-900/50"
+          title="编辑"
+        >
+          <Edit2 className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => onDelete(task.id)}
+          className="p-2 text-red-600 hover:bg-red-100 rounded dark:text-red-400 dark:hover:bg-red-900/50"
+          title="删除"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    </Reorder.Item>
   )
 }
 
@@ -285,7 +276,8 @@ const TaskList: React.FC = () => {
     updateTask,
     deleteTask,
     completeTask,
-    initialize
+    initialize,
+    reorderTasks
   } = useTaskStore()
 
   const { setCurrentTask } = useTimerStore()
@@ -330,6 +322,10 @@ const TaskList: React.FC = () => {
     if (confirm('确定要删除这个任务吗？')) {
       await deleteTask(taskId)
     }
+  }
+
+  const handleReorder = async (reorderedTasks: Task[]): Promise<void> => {
+    await reorderTasks(reorderedTasks)
   }
 
   return (
@@ -410,18 +406,25 @@ const TaskList: React.FC = () => {
           </div>
         )}
 
-        <AnimatePresence>
-          {filteredTasks.map((task) => (
-            <TaskItem
-              key={task.id}
-              task={task}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onToggleComplete={handleToggleComplete}
-              onStartPomodoro={handleStartPomodoro}
-            />
-          ))}
-        </AnimatePresence>
+        <Reorder.Group
+          axis="y"
+          values={filteredTasks}
+          onReorder={handleReorder}
+          className="divide-y divide-gray-200 dark:divide-gray-700"
+        >
+          <AnimatePresence>
+            {filteredTasks.map((task) => (
+              <TaskItem
+                key={task.id}
+                task={task}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onToggleComplete={handleToggleComplete}
+                onStartPomodoro={handleStartPomodoro}
+              />
+            ))}
+          </AnimatePresence>
+        </Reorder.Group>
       </div>
 
       {/* 任务表单 */}

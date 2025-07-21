@@ -25,6 +25,7 @@ interface TaskStore {
   deleteTask: (id: string) => Promise<void>
   completeTask: (id: string) => Promise<Task | undefined>
   addPomodoroToTask: (id: string) => Promise<Task | undefined>
+  reorderTasks: (tasks: Task[]) => Promise<void>
 
   // 过滤和排序
   setFilter: (filter: 'all' | 'pending' | 'in-progress' | 'completed') => void
@@ -167,6 +168,7 @@ export const useTaskStore = create<TaskStore>()(
           set((draft) => {
             draft.error = error instanceof Error ? error.message : '删除任务失败'
           })
+          throw error
         }
       },
 
@@ -177,14 +179,14 @@ export const useTaskStore = create<TaskStore>()(
           if (!task) throw new Error(`任务 ${id} 不存在`)
 
           const updatedTask = await get().updateTask(id, {
-            isCompleted: true,
-            completedAt: new Date()
+            isCompleted: !task.isCompleted,
+            completedAt: !task.isCompleted ? new Date() : undefined
           })
 
           return updatedTask
         } catch (error) {
           set((draft) => {
-            draft.error = error instanceof Error ? error.message : '完成任务失败'
+            draft.error = error instanceof Error ? error.message : '更新任务失败'
           })
         }
       },
@@ -204,6 +206,30 @@ export const useTaskStore = create<TaskStore>()(
           set((draft) => {
             draft.error = error instanceof Error ? error.message : '更新任务失败'
           })
+        }
+      },
+
+      // 重排序任务
+      reorderTasks: async (tasks: Task[]) => {
+        try {
+          const data = await storage.read()
+          // 更新任务顺序
+          const updatedTasks = tasks.map((task) => ({
+            ...task,
+            updatedAt: new Date()
+          }))
+          
+          data.tasks = updatedTasks
+          await storage.write(data)
+
+          set((draft) => {
+            draft.tasks = updatedTasks
+          })
+        } catch (error) {
+          set((draft) => {
+            draft.error = error instanceof Error ? error.message : '重排序任务失败'
+          })
+          throw error
         }
       },
 
@@ -241,8 +267,6 @@ export const useTaskStore = create<TaskStore>()(
 
       // 批量操作
       deleteCompletedTasks: async () => {
-        const completedTasks = get().tasks.filter((task) => task.isCompleted)
-
         try {
           const data = await storage.read()
           data.tasks = data.tasks.filter((task) => !task.isCompleted)
@@ -255,6 +279,7 @@ export const useTaskStore = create<TaskStore>()(
           set((draft) => {
             draft.error = error instanceof Error ? error.message : '删除已完成任务失败'
           })
+          throw error
         }
       },
 
@@ -263,7 +288,7 @@ export const useTaskStore = create<TaskStore>()(
           const data = await storage.read()
           const now = new Date()
 
-          data.tasks = data.tasks.map((task) =>
+          const updatedTasks = data.tasks.map((task) =>
             task.isCompleted
               ? task
               : {
@@ -274,24 +299,17 @@ export const useTaskStore = create<TaskStore>()(
                 }
           )
 
+          data.tasks = updatedTasks
           await storage.write(data)
 
           set((draft) => {
-            draft.tasks = draft.tasks.map((task) =>
-              task.isCompleted
-                ? task
-                : {
-                    ...task,
-                    isCompleted: true,
-                    completedAt: now,
-                    updatedAt: now
-                  }
-            )
+            draft.tasks = updatedTasks
           })
         } catch (error) {
           set((draft) => {
             draft.error = error instanceof Error ? error.message : '标记所有任务为已完成失败'
           })
+          throw error
         }
       },
 
@@ -356,34 +374,17 @@ export const useFilteredTasks = (): Task[] => {
   }, [tasks, filter, sortBy, sortOrder])
 }
 
-export const useTaskStats = (): {
-  total: number
-  completed: number
-  inProgress: number
-  pending: number
-  totalPomodoros: number
-  completionRate: number
-} => {
+// 任务统计选择器
+export const useTaskStats = () => {
   const tasks = useTaskStore((state) => state.tasks)
 
   return useMemo(() => {
-    const total = tasks.length
-    const completed = tasks.filter((task) => task.isCompleted).length
-    const inProgress = tasks.filter(
-      (task) => !task.isCompleted && task.completedPomodoros > 0
-    ).length
-    const pending = tasks.filter(
-      (task) => !task.isCompleted && task.completedPomodoros === 0
-    ).length
-    const totalPomodoros = tasks.reduce((sum, task) => sum + task.completedPomodoros, 0)
-
     return {
-      total,
-      completed,
-      inProgress,
-      pending,
-      totalPomodoros,
-      completionRate: total > 0 ? (completed / total) * 100 : 0
+      total: tasks.length,
+      completed: tasks.filter((task) => task.isCompleted).length,
+      inProgress: tasks.filter((task) => !task.isCompleted && task.completedPomodoros > 0).length,
+      pending: tasks.filter((task) => !task.isCompleted && task.completedPomodoros === 0).length,
+      totalPomodoros: tasks.reduce((sum, task) => sum + task.completedPomodoros, 0)
     }
   }, [tasks])
 }

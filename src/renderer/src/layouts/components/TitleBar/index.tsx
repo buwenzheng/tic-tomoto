@@ -3,9 +3,10 @@ import clsx from 'clsx'
 import { ThemeToggle } from '../ThemeToggle'
 import { WindowControls } from '../WindowControls'
 import { AppLogo } from './AppLogo'
+import { usePlatform } from '@/hooks/usePlatform'
 
 export const TitleBar: React.FC = memo(() => {
-  const isMacOS = window.tomatoAPI?.platform === 'darwin'
+  const { isMacOS } = usePlatform()
 
   return (
     <div 

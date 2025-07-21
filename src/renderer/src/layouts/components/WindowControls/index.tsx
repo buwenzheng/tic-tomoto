@@ -1,34 +1,9 @@
 import React, { memo } from 'react'
 import { Minus, Maximize2, X } from 'lucide-react'
+import { useWindowControls } from '@/hooks/useWindowControls'
 
 export const WindowControls: React.FC = memo(() => {
-  const handleMinimize = (): void => {
-    if (window.tomatoAPI?.window?.minimize) {
-      window.tomatoAPI.window.minimize()
-    }
-  }
-
-  const handleMaximize = async (): Promise<void> => {
-    const win = window.tomatoAPI?.window
-    if (win?.isMaximized && win?.maximize && win?.unmaximize) {
-      try {
-        const isMaximized = await win.isMaximized()
-        if (isMaximized) {
-          win.unmaximize()
-        } else {
-          win.maximize()
-        }
-      } catch (error) {
-        console.error('Failed to toggle maximize:', error)
-      }
-    }
-  }
-
-  const handleClose = (): void => {
-    if (window.tomatoAPI?.window?.close) {
-      window.tomatoAPI.window.close()
-    }
-  }
+  const { handleMinimize, handleMaximize, handleClose } = useWindowControls()
 
   return (
     <div className="flex items-center space-x-1 no-drag-region">

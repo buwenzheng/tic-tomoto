@@ -1,8 +1,9 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { Play, Pause, Square, RotateCcw } from 'lucide-react'
 import { TimerMode } from '@/types'
 import { useTimerStore, formatTime, getProgress } from '@/stores/timerStore'
+import { useTaskStore } from '@/stores/taskStore'
 import clsx from 'clsx'
 
 // 环形进度条组件
@@ -14,90 +15,66 @@ interface CircularProgressProps {
   isRunning: boolean
 }
 
-const CircularProgress: React.FC<CircularProgressProps> = ({
-  progress,
-  size,
-  strokeWidth,
-  mode,
-  isRunning
-}) => {
+const CircularProgress: React.FC<CircularProgressProps> = ({ progress, size, strokeWidth, mode, isRunning }) => {
   const radius = (size - strokeWidth) / 2
   const circumference = radius * 2 * Math.PI
-  const strokeDashoffset = circumference - (progress / 100) * circumference
+  const strokeDashoffset = circumference * (1 - progress)
 
-  const strokeColor =
-    mode === TimerMode.WORK ? '#ef4444' : mode === TimerMode.SHORT_BREAK ? '#06b6d4' : '#8b5cf6'
+  const modeColor =
+    mode === TimerMode.WORK
+      ? 'stroke-red-500'
+      : mode === TimerMode.SHORT_BREAK
+        ? 'stroke-cyan-500'
+        : 'stroke-purple-500'
 
   return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="absolute inset-0 transform -rotate-90">
+    <div className="relative">
+      {/* 背景圆环 */}
+      <svg width={size} height={size} className="transform -rotate-90">
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="currentColor"
           strokeWidth={strokeWidth}
-          className="text-gray-200 dark:text-gray-700"
+          className="stroke-gray-200 dark:stroke-gray-700"
         />
-
+        {/* 进度圆环 */}
         <motion.circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke={strokeColor}
           strokeWidth={strokeWidth}
-          strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={strokeDashoffset}
+          className={clsx(modeColor, 'transition-all duration-300')}
           animate={{ strokeDashoffset }}
-          transition={{ duration: isRunning ? 1 : 0.5, ease: 'linear' }}
         />
       </svg>
+      {/* 动画点 */}
+      {isRunning && (
+        <motion.div
+          className={clsx(
+            'absolute w-3 h-3 rounded-full',
+            mode === TimerMode.WORK
+              ? 'bg-red-500'
+              : mode === TimerMode.SHORT_BREAK
+                ? 'bg-cyan-500'
+                : 'bg-purple-500'
+          )}
+          style={{
+            top: strokeWidth / 2,
+            left: '50%',
+            translateX: '-50%',
+            rotate: `${progress * 360}deg`,
+            transformOrigin: '50% ${size / 2}px'
+          }}
+          animate={{ rotate: [0, 360] }}
+          transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+        />
+      )}
     </div>
-  )
-}
-
-// 控制按钮组件
-interface ControlButtonProps {
-  onClick: () => void
-  disabled?: boolean
-  variant?: 'primary' | 'secondary' | 'danger'
-  size?: 'sm' | 'md' | 'lg'
-  children: React.ReactNode
-}
-
-const ControlButton: React.FC<ControlButtonProps> = ({
-  onClick,
-  disabled = false,
-  variant = 'secondary',
-  size = 'md',
-  children
-}) => {
-  const buttonClass = clsx(
-    'inline-flex items-center justify-center rounded-full font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed',
-    {
-      'bg-primary-500 text-white hover:bg-primary-600': variant === 'primary',
-      'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300':
-        variant === 'secondary',
-      'bg-red-100 text-red-700 hover:bg-red-200': variant === 'danger',
-      'w-8 h-8 text-sm': size === 'sm',
-      'w-12 h-12 text-base': size === 'md',
-      'w-16 h-16 text-lg': size === 'lg'
-    }
-  )
-
-  return (
-    <motion.button
-      onClick={onClick}
-      disabled={disabled}
-      className={buttonClass}
-      whileTap={{ scale: 0.95 }}
-      whileHover={{ scale: 1.05 }}
-    >
-      {children}
-    </motion.button>
   )
 }
 
@@ -110,6 +87,7 @@ const Timer: React.FC = () => {
     isRunning,
     isPaused,
     currentSession,
+    currentTaskId,
     start,
     pause,
     stop,
@@ -118,8 +96,19 @@ const Timer: React.FC = () => {
     cleanup
   } = useTimerStore()
 
+  const { getTaskById } = useTaskStore()
+  const currentTask = currentTaskId ? getTaskById(currentTaskId) : undefined
+
   // 使用 ref 来避免重复初始化
   const isInitialized = useRef(false)
+
+  const handlePlayPause = useCallback((): void => {
+    if (isRunning) {
+      pause()
+    } else {
+      start()
+    }
+  }, [isRunning, pause, start])
 
   useEffect(() => {
     // 确保全局只初始化一次
@@ -129,14 +118,33 @@ const Timer: React.FC = () => {
       isInitialized.current = true
     }
 
+    // 注册快捷键事件监听
+    const handleToggleTimer = () => {
+      handlePlayPause()
+    }
+
+    document.addEventListener('toggle-timer', handleToggleTimer)
+
+    // 注册键盘快捷键
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !e.repeat && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
+        e.preventDefault()
+        handlePlayPause()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyPress)
+
     return () => {
       // 只在组件真正卸载时清理
       if (isInitialized.current) {
         cleanup()
         isInitialized.current = false
       }
+      document.removeEventListener('toggle-timer', handleToggleTimer)
+      document.removeEventListener('keydown', handleKeyPress)
     }
-  }, []) // 空依赖数组，只在组件挂载时执行一次
+  }, [initialize, cleanup, handlePlayPause])
 
   const progress = getProgress(timeLeft, totalTime)
   const formattedTime = formatTime(timeLeft)
@@ -146,76 +154,74 @@ const Timer: React.FC = () => {
 
   const modeColor =
     mode === TimerMode.WORK
-      ? 'bg-red-100 text-red-800'
+      ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-400'
       : mode === TimerMode.SHORT_BREAK
-        ? 'bg-cyan-100 text-cyan-800'
-        : 'bg-purple-100 text-purple-800'
-
-  const handlePlayPause = (): void => {
-    if (isRunning) {
-      pause()
-    } else {
-      start()
-    }
-  }
+        ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-400'
+        : 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-400'
 
   return (
-    <div className="flex flex-col items-center space-y-8 p-8">
-      {/* 模式指示器 */}
-      <span
-        className={clsx(
-          'inline-flex items-center px-3 py-1 rounded-full text-sm font-medium',
-          modeColor
-        )}
-      >
-        {modeText}
-      </span>
-
-      {/* 环形计时器 */}
-      <div className="relative flex items-center justify-center">
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-theme(spacing.16))]">
+      <div className="relative">
         <CircularProgress
           progress={progress}
-          size={280}
+          size={320}
           strokeWidth={8}
           mode={mode}
           isRunning={isRunning}
         />
-
-        {/* 中心内容 */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="text-6xl font-mono font-bold text-gray-900 dark:text-gray-100">
+          <span className="text-6xl font-bold text-gray-900 dark:text-gray-100 mb-2 font-mono">
             {formattedTime}
-          </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-            第 {currentSession} 个番茄
-          </div>
+          </span>
+          <span className={clsx('px-3 py-1 rounded-full text-sm font-medium', modeColor)}>
+            {modeText}
+          </span>
+          {currentTask && (
+            <span className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              当前任务：{currentTask.title}
+            </span>
+          )}
         </div>
       </div>
 
-      {/* 控制按钮 */}
-      <div className="flex items-center space-x-4">
-        <ControlButton
+      <div className="flex items-center space-x-4 mt-8">
+        <button
           onClick={handlePlayPause}
-          variant="primary"
-          size="lg"
-          disabled={timeLeft === 0}
+          className={clsx(
+            'w-16 h-16 rounded-full flex items-center justify-center transition-colors',
+            isRunning
+              ? 'bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-400'
+              : 'bg-green-100 text-green-600 hover:bg-green-200 dark:bg-green-900/50 dark:text-green-400'
+          )}
+          title={isRunning ? '暂停 (空格)' : '开始 (空格)'}
         >
-          {isRunning ? <Pause size={24} /> : <Play size={24} />}
-        </ControlButton>
+          {isRunning ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8" />}
+        </button>
 
-        <ControlButton onClick={stop} variant="danger" disabled={!isRunning && !isPaused}>
-          <Square size={20} />
-        </ControlButton>
+        <button
+          onClick={stop}
+          className="w-12 h-12 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 flex items-center justify-center transition-colors"
+          title="停止"
+          disabled={!isRunning && !isPaused}
+        >
+          <Square className="w-6 h-6" />
+        </button>
 
-        <ControlButton onClick={reset} disabled={isRunning}>
-          <RotateCcw size={20} />
-        </ControlButton>
+        <button
+          onClick={reset}
+          className="w-12 h-12 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 flex items-center justify-center transition-colors"
+          title="重置"
+          disabled={!isPaused}
+        >
+          <RotateCcw className="w-6 h-6" />
+        </button>
       </div>
 
-      {/* 快捷操作提示 */}
-      <div className="text-xs text-gray-400 dark:text-gray-500 text-center">
-        <p>空格键：开始/暂停 • R 键：重置 • S 键：停止</p>
-      </div>
+      {currentSession > 0 && (
+        <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+          已完成 {currentSession} 个番茄钟
+        </div>
+      )}
     </div>
   )
 }

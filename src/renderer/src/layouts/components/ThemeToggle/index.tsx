@@ -1,28 +1,9 @@
-import React, { useState, useEffect, memo } from 'react'
+import React, { memo } from 'react'
 import { Sun, Moon } from 'lucide-react'
+import { useTheme } from '@/hooks/useTheme'
 
 export const ThemeToggle: React.FC = memo(() => {
-  const [isDark, setIsDark] = useState(() => {
-    const savedTheme = localStorage.getItem('theme')
-    if (savedTheme) {
-      return savedTheme === 'dark'
-    }
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
-  })
-
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark')
-      localStorage.setItem('theme', 'dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-      localStorage.setItem('theme', 'light')
-    }
-  }, [isDark])
-
-  const toggleTheme = (): void => {
-    setIsDark(!isDark)
-  }
+  const { isDark, toggleTheme } = useTheme()
 
   return (
     <button
