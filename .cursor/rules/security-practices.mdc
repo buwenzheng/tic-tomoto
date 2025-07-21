@@ -1,0 +1,29 @@
+# 安全最佳实践
+
+1. IPC通信：
+   - 永远不要向渲染进程暴露整个`electron` API
+   - 在[electron.vite.config.ts](mdc:electron.vite.config.ts)中使用contextIsolation并禁用nodeIntegration
+   - 在主进程中验证所有IPC消息后再处理
+   - 为所有IPC通道和负载使用显式类型
+
+2. 文件系统访问：
+   - 永远不要信任用户输入的文件路径
+   - 在使用前清理和验证所有文件路径
+   - 为所有文件操作使用适当的错误处理
+   - 将文件系统访问限制在特定目录
+
+3. 外部资源：
+   - 在加载外部内容前验证所有URL
+   - 使用内容安全策略（CSP）头
+   - 实施适当的CORS策略
+   - 优雅地处理外部资源错误
+
+4. 数据存储：
+   - 永远不要以明文存储敏感数据
+   - 为敏感数据使用适当的加密
+   - 实施安全的密钥存储
+   - 不再需要时从内存中清除敏感数据
+description:
+globs:
+alwaysApply: false
+---

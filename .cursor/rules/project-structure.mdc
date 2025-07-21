@@ -1,0 +1,18 @@
+# 项目结构指南
+
+这是一个使用TypeScript和React的Electron应用程序，使用electron-vite作为构建工具。项目遵循三进程架构：
+
+1. 主进程 ([src/main](mdc:src/main)): 处理Electron的主进程逻辑
+2. 渲染进程 ([src/renderer](mdc:src/renderer)): 包含React应用程序UI
+3. 预加载进程 ([src/preload](mdc:src/preload)): 管理主进程和渲染进程之间的安全IPC通信
+
+关键配置文件：
+- [electron.vite.config.ts](mdc:electron.vite.config.ts): Electron的Vite构建配置
+- [tsconfig.json](mdc:tsconfig.json): 基础TypeScript配置
+- [tsconfig.web.json](mdc:tsconfig.web.json): 渲染进程的TypeScript配置
+- [tsconfig.node.json](mdc:tsconfig.node.json): 主进程/预加载进程的TypeScript配置
+- [electron-builder.yml](mdc:electron-builder.yml): Electron应用程序打包配置
+description:
+globs:
+alwaysApply: false
+---
