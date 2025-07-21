@@ -1,0 +1,51 @@
+# 代码风格规范
+
+## 组件结构
+```typescript
+// 1. 导入
+import React from 'react'
+import type { Props } from './types'
+
+// 2. 类型定义
+interface ComponentProps extends Props {
+  // ...
+}
+
+// 3. 组件定义
+export const Component: React.FC<ComponentProps> = () => {
+  // hooks
+  // 副作用
+  // 事件处理
+  // 渲染
+}
+```
+
+## 状态管理
+- 全局状态：使用Zustand
+- 功能状态：功能模块内的store
+- 组件状态：useState/useReducer
+
+## IPC通信
+- 通道命名：`module:action`
+- 错误处理：try/catch + 用户反馈
+- 类型安全：定义请求和响应类型
+
+## 错误处理
+- 定义错误类型
+- 记录错误日志
+- 提供用户反馈
+- 实现错误恢复
+
+## 注释规范
+- 组件：描述功能和props
+- 函数：描述参数和返回值
+- 复杂逻辑：解释实现原理
+
+## 测试规范
+- 单元测试：组件和函数
+- 集成测试：功能模块
+- E2E测试：用户流程
+description:
+globs:
+alwaysApply: false
+---

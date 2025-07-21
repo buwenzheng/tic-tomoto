@@ -1,18 +1,37 @@
-# 项目结构指南
+# 项目结构规范
 
-这是一个使用TypeScript和React的Electron应用程序，使用electron-vite作为构建工具。项目遵循三进程架构：
+## 进程分层
+- [src/main](mdc:src/main): Electron主进程，负责系统级功能
+- [src/preload](mdc:src/preload): 预加载脚本，安全地暴露API
+- [src/renderer](mdc:src/renderer): 渲染进程，实现用户界面
 
-1. 主进程 ([src/main](mdc:src/main)): 处理Electron的主进程逻辑
-2. 渲染进程 ([src/renderer](mdc:src/renderer)): 包含React应用程序UI
-3. 预加载进程 ([src/preload](mdc:src/preload)): 管理主进程和渲染进程之间的安全IPC通信
+## 主进程结构
+- core/: 核心功能模块（窗口管理、IPC等）
+- features/: 业务功能模块（存储、更新等）
+- services/: 后台服务
+- utils/: 工具函数
 
-关键配置文件：
-- [electron.vite.config.ts](mdc:electron.vite.config.ts): Electron的Vite构建配置
-- [tsconfig.json](mdc:tsconfig.json): 基础TypeScript配置
-- [tsconfig.web.json](mdc:tsconfig.web.json): 渲染进程的TypeScript配置
-- [tsconfig.node.json](mdc:tsconfig.node.json): 主进程/预加载进程的TypeScript配置
-- [electron-builder.yml](mdc:electron-builder.yml): Electron应用程序打包配置
-description:
-globs:
-alwaysApply: false
----
+## 预加载脚本结构
+- api/: 按模块组织的API接口
+- utils/: 工具函数
+
+## 渲染进程结构
+- components/: 通用组件
+- features/: 功能模块
+- layouts/: 布局组件
+- pages/: 页面组件
+- stores/: 状态管理
+- utils/: 工具函数
+
+## 命名规范
+- 组件文件/目录: PascalCase
+- 工具/配置文件: camelCase
+- 样式文件: camelCase
+
+## 模块组织
+每个功能模块应包含：
+- components/: 模块专用组件
+- hooks/: 模块专用钩子
+- stores/: 模块状态管理
+- utils/: 模块工具函数
+- types.ts: 类型定义

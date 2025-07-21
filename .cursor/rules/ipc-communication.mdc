@@ -1,0 +1,71 @@
+# IPC通信规范
+
+## 通道命名规范
+- 格式：`module:action`
+- 示例：
+  - `window:minimize`
+  - `app:getVersion`
+  - `storage:read`
+
+## 主进程处理器
+```typescript
+// 1. 类型定义
+interface RequestType {
+  // 请求参数类型
+}
+
+interface ResponseType {
+  // 响应数据类型
+}
+
+// 2. 处理器实现
+ipcMain.handle('channel', async (event, data: RequestType): Promise<ResponseType> => {
+  try {
+    // 参数验证
+    // 业务处理
+    // 返回结果
+  } catch (error) {
+    // 错误处理
+  }
+})
+```
+
+## 预加载脚本
+```typescript
+// 1. API定义
+const api = {
+  module: {
+    action: (data: RequestType) => ipcRenderer.invoke('module:action', data)
+  }
+}
+
+// 2. 类型定义
+interface TomatoAPI {
+  module: {
+    action: (data: RequestType) => Promise<ResponseType>
+  }
+}
+```
+
+## 渲染进程使用
+```typescript
+// 1. 调用API
+const result = await window.tomatoAPI.module.action(data)
+
+// 2. 错误处理
+try {
+  const result = await window.tomatoAPI.module.action(data)
+} catch (error) {
+  // 错误处理
+}
+```
+
+## 安全考虑
+- 参数验证
+- 类型检查
+- 错误处理
+- 权限控制
+description:
+globs:
+alwaysApply: false
+---
