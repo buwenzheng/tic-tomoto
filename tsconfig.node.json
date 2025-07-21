@@ -3,13 +3,8 @@
   "include": ["electron.vite.config.*", "src/main/*", "src/preload/*"],
   "compilerOptions": {
     "composite": true,
-    "types": ["electron-vite/node"],
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/renderer/src/*"]
-    },
+    "resolveJsonModule": true,
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "moduleResolution": "node"
+    "types": ["electron-vite/node"]
   }
 }

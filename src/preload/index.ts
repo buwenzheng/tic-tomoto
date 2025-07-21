@@ -60,7 +60,13 @@ const tomatoAPI = {
     toggleDevTools: () => ipcRenderer.send('dev:toggleDevTools')
   },
   // 添加平台信息
-  platform: process.platform
+  platform: process.platform,
+  versions: {
+    ...process.versions,
+    get app() {
+      return ipcRenderer.invoke('app:getVersion')
+    }
+  }
 }
 
 // 使用contextBridge暴露API

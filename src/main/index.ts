@@ -230,7 +230,7 @@ function createWindow(): void {
     ...(process.platform === 'darwin'
       ? {
           titleBarStyle: 'hiddenInset', // macOS下使用hiddenInset
-          trafficLightPosition: { x: 20, y: 20 }, // 调整红绿灯按钮位置
+          trafficLightPosition: { x: 8, y: 12 }, // 调整红绿灯按钮位置
         }
       : {
           frame: false, // Windows/Linux下完全自定义框架

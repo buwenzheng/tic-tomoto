@@ -8,7 +8,7 @@ export type RouteConfig = RouteObject & {
 export const routes: RouteConfig[] = [
   {
     path: 'timer',
-    element: <TimerPage />,
+    Component: TimerPage,
     title: '番茄钟'
     // 可以在这里添加 loader 函数来预加载数据
     // loader: async () => {
@@ -18,7 +18,7 @@ export const routes: RouteConfig[] = [
   },
   {
     path: 'tasks',
-    element: <TasksPage />,
+    Component: TasksPage,
     title: '任务'
     // 可以在这里添加 loader 函数来预加载任务数据
     // loader: async () => {
@@ -28,7 +28,7 @@ export const routes: RouteConfig[] = [
   },
   {
     path: 'stats',
-    element: <StatsPage />,
+    Component: StatsPage,
     title: '统计'
     // 可以在这里添加 loader 函数来预加载统计数据
     // loader: async () => {
@@ -38,7 +38,7 @@ export const routes: RouteConfig[] = [
   },
   {
     path: 'settings',
-    element: <SettingsPage />,
+    Component: SettingsPage,
     title: '设置'
     // 可以在这里添加 loader 函数来预加载设置数据
     // loader: async () => {

@@ -70,7 +70,10 @@ interface TomatoAPI {
   }
 
   // 平台信息
-  platform: string
+  platform: string,
+  versions: Omit<NodeJS.ProcessVersions, 'app'> & {
+    app: Promise<string>
+  }
 }
 
 interface Window {

@@ -26,12 +26,12 @@ const ErrorBoundary = () => {
 const router = createHashRouter([
   {
     path: '/',
-    element: <AppLayout />,
-    errorElement: <ErrorBoundary />,
+    Component: AppLayout,
+    ErrorBoundary,
     children: [
       {
         index: true,
-        element: <TimerPage />
+        Component: TimerPage
       },
       ...routes
     ]

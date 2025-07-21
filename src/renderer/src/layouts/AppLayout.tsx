@@ -126,14 +126,12 @@ const TitleBar: React.FC = memo(() => {
       className={clsx(
         "flex items-center bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700",
         // macOS下调整左右padding，右侧padding减小以减少空白
-        isMacOS ? "px-[70px] py-2" : "px-4 py-2"
+        isMacOS ? "px-[70px] py-1" : "px-4 py-1"
       )}
     >
       {/* Logo和标题区域 */}
       <div className={clsx(
-        "flex items-center space-x-3 drag-region",
-        // 在macOS上让Logo区域居中，在其他平台上靠左对齐
-        isMacOS ? "flex-1 justify-center" : "flex-1"
+        "flex items-center space-x-3 drag-region flex-1"
       )}>
         <div className="w-6 h-6 bg-gradient-to-br from-red-500 to-orange-500 rounded flex items-center justify-center">
           <span className="text-white text-sm">🍅</span>
@@ -198,7 +196,8 @@ ActivityBarItem.displayName = 'ActivityBarItem'
 // 活动栏组件
 const ActivityBar: React.FC = memo(() => {
   const location = useLocation()
-  const currentPath = location.pathname.slice(1)
+  // 如果路径为根路径，则默认选中timer
+  const currentPath = location.pathname === '/' ? 'timer' : location.pathname.slice(1)
 
   return (
     <aside className="w-16 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col items-center py-4 space-y-2">
@@ -251,10 +250,6 @@ export const AppLayout: React.FC = () => {
               <Outlet />
             </PageTransition>
           </div>
-          
-          <footer className="text-center py-4 text-xs text-gray-400 dark:text-gray-600">
-            <p>番茄时钟 v1.0.0 - 专注工作，高效生活</p>
-          </footer>
         </main>
       </div>
     </div>

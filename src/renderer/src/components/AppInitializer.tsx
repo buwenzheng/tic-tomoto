@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { storage, StorageFactory } from '@/services/storage'
+import { storage } from '@/services/storage'
 
 interface AppInitializerProps {
   children: React.ReactNode
