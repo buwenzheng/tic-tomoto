@@ -42,7 +42,13 @@ appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
 publish:
-  provider: generic
-  url: https://example.com/auto-updates
+  # 默认关闭自动更新（示例）。若需启用 GitHub Releases，取消注释下方配置。
+  # - provider: github
+  #   owner: your-org-or-user
+  #   repo: tic-tomoto
+  #   releaseType: draft
+  # 占位：或使用 generic 指向自托管更新服务
+  # - provider: generic
+  #   url: https://updates.example.com/tic-tomoto
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/

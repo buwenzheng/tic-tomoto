@@ -1,10 +1,23 @@
-import { app, shell, BrowserWindow, ipcMain, globalShortcut, Notification } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  ipcMain,
+  globalShortcut,
+  Notification,
+  Tray,
+  Menu,
+  session
+} from 'electron'
 import { join } from 'path'
-import { readFile, writeFile, existsSync, mkdirSync } from 'fs'
+import { readFile, writeFile, existsSync, mkdirSync, readdirSync, unlinkSync } from 'fs'
 import { promisify } from 'util'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { autoUpdater } from 'electron-updater'
 import icon from '../../resources/icon.png?asset'
-import { JSONFilePreset } from 'lowdb/node'
+import { JSONFilePreset, LowDB } from 'lowdb/node'
+import { Schema, DEFAULT_DATA, migrateData } from '@shared/schema'
+import { z } from 'zod'
 
 // ===============================
 // 文件系统相关
@@ -29,76 +42,8 @@ const getUserDataPath = (): string => {
 // LowDB 数据库服务
 // ===============================
 
-// 数据库模式
-interface Schema {
-  tasks: any[]
-  timer: {
-    mode: string
-    timeLeft: number
-    totalTime: number
-    isRunning: boolean
-    isPaused: boolean
-  }
-  settings: {
-    workDuration: number
-    shortBreakDuration: number
-    longBreakDuration: number
-    autoStartBreaks: boolean
-    autoStartPomodoros: boolean
-    longBreakInterval: number
-    alarmSound: string
-    alarmVolume: number
-    tickingSound: string
-    tickingVolume: number
-    darkMode: string
-    minimizeToTray: boolean
-  }
-  stats: {
-    totalPomodoros: number
-    totalWorkTime: number
-    dailyPomodoros: Record<string, number>
-    weeklyPomodoros: Record<string, number>
-    monthlyPomodoros: Record<string, number>
-  }
-  version: number
-}
-
-// 默认数据
-const DEFAULT_DATA: Schema = {
-  tasks: [],
-  timer: {
-    mode: 'work',
-    timeLeft: 25 * 60,
-    totalTime: 25 * 60,
-    isRunning: false,
-    isPaused: false
-  },
-  settings: {
-    workDuration: 25,
-    shortBreakDuration: 5,
-    longBreakDuration: 15,
-    autoStartBreaks: false,
-    autoStartPomodoros: false,
-    longBreakInterval: 4,
-    alarmSound: 'bell',
-    alarmVolume: 0.8,
-    tickingSound: 'none',
-    tickingVolume: 0.5,
-    darkMode: 'auto',
-    minimizeToTray: true
-  },
-  stats: {
-    totalPomodoros: 0,
-    totalWorkTime: 0,
-    dailyPomodoros: {},
-    weeklyPomodoros: {},
-    monthlyPomodoros: {}
-  },
-  version: 1
-}
-
 // 数据库实例
-let db: any = null
+let db: LowDB<Schema> | null = null
 
 // 初始化数据库
 async function initializeDatabase(): Promise<void> {
@@ -114,61 +59,33 @@ async function initializeDatabase(): Promise<void> {
   }
 }
 
-// 数据迁移
-async function migrateData(data: Partial<Schema>): Promise<Schema> {
-  // 如果没有版本号，说明是旧数据，需要迁移
-  if (!data.version) {
-    return migrateFromV0(data)
-  }
+// 数据迁移由 @shared/schema 统一提供
 
-  // 未来可以添加更多版本的迁移
-  switch (data.version) {
-    case 1:
-      return data as Schema
-    default:
-      console.warn(`Unknown schema version: ${data.version}`)
-      return DEFAULT_DATA
+// ===============================
+// 简易日志记录（写入 userData/logs/app.log）
+// ===============================
+
+let logFilePath: string | null = null
+
+function initializeLogger(): void {
+  try {
+    const logsDir = join(getUserDataPath(), 'logs')
+    if (!existsSync(logsDir)) mkdirSync(logsDir, { recursive: true })
+    logFilePath = join(logsDir, 'app.log')
+  } catch (err) {
+    console.warn('Failed to initialize logger:', err)
   }
 }
 
-// 从版本0迁移到版本1
-function migrateFromV0(oldData: Partial<Schema>): Schema {
-  const newData = { ...DEFAULT_DATA }
-
-  // 迁移任务数据
-  if (Array.isArray(oldData.tasks)) {
-    newData.tasks = oldData.tasks.map(task => ({
-      ...task,
-      createdAt: task.createdAt || new Date(),
-      updatedAt: task.updatedAt || new Date()
-    }))
+async function writeLog(level: 'info' | 'warn' | 'error', message: string): Promise<void> {
+  try {
+    if (!logFilePath) initializeLogger()
+    const ts = new Date().toISOString()
+    const line = `[${ts}] [${level.toUpperCase()}] ${message}\n`
+    await writeFileAsync(logFilePath as string, line, { flag: 'a', encoding: 'utf-8' })
+  } catch (err) {
+    // ignore logging failure
   }
-
-  // 迁移计时器数据
-  if (oldData.timer) {
-    newData.timer = {
-      ...newData.timer,
-      ...oldData.timer
-    }
-  }
-
-  // 迁移设置数据
-  if (oldData.settings) {
-    newData.settings = {
-      ...newData.settings,
-      ...oldData.settings
-    }
-  }
-
-  // 迁移统计数据
-  if (oldData.stats) {
-    newData.stats = {
-      ...newData.stats,
-      ...oldData.stats
-    }
-  }
-
-  return newData
 }
 
 // ===============================
@@ -212,6 +129,8 @@ class TimerWorker {
 
 let mainWindow: BrowserWindow | null = null
 let timerWorker: TimerWorker | null = null
+let tray: Tray | null = null
+let isQuitting = false
 
 // ===============================
 // 窗口创建函数
@@ -230,14 +149,15 @@ function createWindow(): void {
     ...(process.platform === 'darwin'
       ? {
           titleBarStyle: 'hiddenInset', // macOS下使用hiddenInset
-          trafficLightPosition: { x: 8, y: 12 }, // 调整红绿灯按钮位置
+          trafficLightPosition: { x: 8, y: 12 } // 调整红绿灯按钮位置
         }
       : {
-          frame: false, // Windows/Linux下完全自定义框架
+          frame: false // Windows/Linux下完全自定义框架
         }),
     title: '番茄时钟',
-    vibrancy: 'under-window',
-    visualEffectState: 'active',
+    ...(process.platform === 'darwin'
+      ? { vibrancy: 'under-window', visualEffectState: 'active' }
+      : {}),
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
@@ -253,7 +173,7 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     if (mainWindow) {
-    mainWindow.show()
+      mainWindow.show()
 
       // 开发模式下打开开发者工具
       if (is.dev) {
@@ -268,6 +188,24 @@ function createWindow(): void {
       timerWorker = null
     }
     mainWindow = null
+  })
+
+  // 根据设置最小化到托盘
+  mainWindow.on('close', (e) => {
+    try {
+      const minimizeToTray = db?.data?.settings?.minimizeToTray ?? true
+      if (!isQuitting && minimizeToTray) {
+        e.preventDefault()
+        mainWindow?.hide()
+        writeLog('info', 'Window hidden to tray').catch(() => {})
+      }
+    } catch (err) {
+      if (!isQuitting) {
+        e.preventDefault()
+        mainWindow?.hide()
+        writeLog('warn', 'Window hidden to tray (fallback)').catch(() => {})
+      }
+    }
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -288,10 +226,20 @@ function createWindow(): void {
 // ===============================
 
 function setupIpcHandlers(): void {
+  // ===== 验证器 =====
+  const filenameSchema = z
+    .string()
+    .min(1)
+    .max(255)
+    .regex(/^[A-Za-z0-9_.-]+$/)
+  const acceleratorSchema = z.string().min(1)
+
   // 文件系统API
   ipcMain.handle('fs:readData', async (_, filename: string) => {
     try {
-      const dataPath = join(getUserDataPath(), filename)
+      const parsed = filenameSchema.safeParse(filename)
+      if (!parsed.success) return null
+      const dataPath = join(getUserDataPath(), parsed.data)
       if (!existsSync(dataPath)) {
         return null
       }
@@ -305,7 +253,9 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle('fs:saveData', async (_, filename: string, data: string) => {
     try {
-      const dataPath = join(getUserDataPath(), filename)
+      const parsed = filenameSchema.safeParse(filename)
+      if (!parsed.success || typeof data !== 'string') return false
+      const dataPath = join(getUserDataPath(), parsed.data)
       await writeFileAsync(dataPath, data, 'utf-8')
       return true
     } catch (error) {
@@ -316,7 +266,9 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle('fs:checkFileExists', async (_, filename: string) => {
     try {
-      const dataPath = join(getUserDataPath(), filename)
+      const parsed = filenameSchema.safeParse(filename)
+      if (!parsed.success) return false
+      const dataPath = join(getUserDataPath(), parsed.data)
       return existsSync(dataPath)
     } catch (error) {
       console.error('Error checking file exists:', error)
@@ -352,6 +304,90 @@ function setupIpcHandlers(): void {
       return true
     } catch (error) {
       console.error('Error writing to database:', error)
+      return false
+    }
+  })
+
+  // 备份/恢复 API
+  const getBackupDir = () => {
+    const dir = join(getUserDataPath(), 'backups')
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+    return dir
+  }
+
+  const backupFilenameSchema = z.string().regex(/^backup-\d{8}-\d{6}\.json$/)
+
+  ipcMain.handle('backup:list', async () => {
+    try {
+      const dir = getBackupDir()
+      const files = readdirSync(dir)
+        .filter((f) => backupFilenameSchema.safeParse(f).success)
+        .sort()
+        .reverse()
+      return files
+    } catch (err) {
+      console.error('Error listing backups:', err)
+      return []
+    }
+  })
+
+  ipcMain.handle('backup:create', async () => {
+    try {
+      await initializeDatabase()
+      const dir = getBackupDir()
+      const now = new Date()
+      const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+      const filename = `backup-${ts}.json`
+      const filepath = join(dir, filename)
+      await writeFileAsync(filepath, JSON.stringify(db.data, null, 2), 'utf-8')
+      // 保留最近 10 份
+      const files = readdirSync(dir)
+        .filter((f) => backupFilenameSchema.safeParse(f).success)
+        .sort()
+        .reverse()
+      if (files.length > 10) {
+        const toRemove = files.slice(10)
+        toRemove.forEach((f) => {
+          try {
+            unlinkSync(join(dir, f))
+          } catch (err) {
+            writeLog('debug', `Failed to cleanup old backup: ${err}`)
+          }
+        })
+      }
+      return { success: true, filename }
+    } catch (err) {
+      console.error('Error creating backup:', err)
+      return { success: false }
+    }
+  })
+
+  ipcMain.handle('backup:restore', async (_, filename: string) => {
+    try {
+      const parsed = backupFilenameSchema.safeParse(filename)
+      if (!parsed.success) return { success: false }
+      const filepath = join(getBackupDir(), parsed.data)
+      const content = await readFileAsync(filepath, 'utf-8')
+      const data = JSON.parse(content)
+      await initializeDatabase()
+      db.data = migrateData(data)
+      await db.write()
+      // 通知渲染进程可自行刷新
+      if (mainWindow) mainWindow.webContents.send('backup:restored')
+      return { success: true }
+    } catch (err) {
+      console.error('Error restoring backup:', err)
+      return { success: false }
+    }
+  })
+
+  ipcMain.handle('backup:openFolder', async () => {
+    try {
+      const dir = getBackupDir()
+      await shell.openPath(dir)
+      return true
+    } catch (err) {
+      console.error('Error opening backup folder:', err)
       return false
     }
   })
@@ -451,11 +487,14 @@ function setupIpcHandlers(): void {
     }
   )
 
-  ipcMain.on('system:registerGlobalShortcut', (_, accelerator: string, channelId: string) => {
+  ipcMain.on('system:registerGlobalShortcut', (_, accelerator: string) => {
     try {
-      globalShortcut.register(accelerator, () => {
+      const parsed = acceleratorSchema.safeParse(accelerator)
+      if (!parsed.success) return
+      const channel = 'app:globalShortcut:toggleTimer'
+      globalShortcut.register(parsed.data, () => {
         if (mainWindow) {
-          mainWindow.webContents.send(channelId)
+          mainWindow.webContents.send(channel)
         }
       })
     } catch (error) {
@@ -505,10 +544,12 @@ function setupIpcHandlers(): void {
   })
 
   ipcMain.on('app:quit', () => {
+    isQuitting = true
     app.quit()
   })
 
   ipcMain.on('app:restart', () => {
+    isQuitting = true
     app.relaunch()
     app.exit()
   })
@@ -522,6 +563,21 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle('app:isLaunchOnStartup', () => {
     return app.getLoginItemSettings().openAtLogin
+  })
+
+  // 更新相关 API
+  ipcMain.on('update:check', async () => {
+    try {
+      writeLog('info', 'Checking for updates').catch(() => {})
+      await autoUpdater.checkForUpdates()
+    } catch (err) {
+      console.error('Update check failed:', err)
+    }
+  })
+
+  ipcMain.on('update:quitAndInstall', () => {
+    isQuitting = true
+    autoUpdater.quitAndInstall()
   })
 
   // 开发者API
@@ -560,12 +616,82 @@ app.whenReady().then(() => {
   // 设置IPC处理器
   setupIpcHandlers()
 
+  // 初始化数据库，供后续事件读取设置
+  initializeDatabase().catch(() => {})
+
   // Default open or close DevTools by F12 in development
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
   createWindow()
+
+  // Dev 环境为 HMR 放宽 CSP
+  if (is.dev) {
+    try {
+      session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+        const csp =
+          "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws:; frame-src 'none'; object-src 'none'"
+        const headers = details.responseHeaders || {}
+        headers['Content-Security-Policy'] = [csp]
+        callback({ responseHeaders: headers })
+      })
+    } catch (e) {
+      console.warn('Failed to set dev CSP headers:', e)
+    }
+  }
+
+  // 托盘
+  try {
+    tray = new Tray(process.platform === 'linux' ? icon : undefined)
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: '显示/隐藏',
+        click: () => {
+          if (!mainWindow) return
+          if (mainWindow.isVisible()) mainWindow.hide()
+          else mainWindow.show()
+        }
+      },
+      { type: 'separator' },
+      {
+        label: '退出',
+        click: () => {
+          isQuitting = true
+          app.quit()
+        }
+      }
+    ])
+    tray.setToolTip('番茄时钟')
+    tray.setContextMenu(contextMenu)
+    tray.on('click', () => {
+      if (!mainWindow) return
+      if (mainWindow.isVisible()) mainWindow.hide()
+      else mainWindow.show()
+    })
+  } catch (err) {
+    console.warn('Tray init failed:', err)
+  }
+
+  // 自动更新事件
+  autoUpdater.on('update-available', () => {
+    writeLog('info', 'Update available').catch(() => {})
+    mainWindow?.webContents.send('update:available')
+  })
+  autoUpdater.on('update-not-available', () => {
+    writeLog('info', 'Update not available').catch(() => {})
+    mainWindow?.webContents.send('update:not-available')
+  })
+  autoUpdater.on('error', (err) => {
+    writeLog('error', `Update error: ${err?.message || String(err)}`).catch(() => {})
+    mainWindow?.webContents.send('update:error', err?.message || String(err))
+  })
+  autoUpdater.on('download-progress', (info) => {
+    mainWindow?.webContents.send('update:download-progress', info)
+  })
+  autoUpdater.on('update-downloaded', () => {
+    mainWindow?.webContents.send('update:downloaded')
+  })
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
@@ -579,6 +705,10 @@ app.on('window-all-closed', () => {
   // 清理全局快捷键
   globalShortcut.unregisterAll()
 
+  if (process.platform !== 'darwin' && !isQuitting) {
+    // 非 macOS 默认保持托盘常驻，不直接退出
+    return
+  }
   if (process.platform !== 'darwin') {
     app.quit()
   }
@@ -592,25 +722,34 @@ app.on('before-quit', () => {
   globalShortcut.unregisterAll()
 })
 
-// Security: 限制新窗口创建
+// Security: 统一管理外链与导航策略
 app.on('web-contents-created', (_, contents) => {
   contents.setWindowOpenHandler(({ url }) => {
-    const parsedUrl = new URL(url)
-
-    if (parsedUrl.origin !== 'https://electron-vite.org') {
+    try {
+      const parsedUrl = new URL(url)
+      // 仅允许受信任源，其他以外部方式打开
+      const allowlist = new Set<string>(['https://electron-vite.org'])
+      if (!allowlist.has(parsedUrl.origin)) {
+        shell.openExternal(url)
+        return { action: 'deny' }
+      }
+      return { action: 'allow' }
+    } catch (err) {
+      writeLog('debug', `Navigation check failed: ${err}`)
       return { action: 'deny' }
     }
-
-    return { action: 'allow' }
   })
-})
 
-// 在生产环境中禁用导航到外部网站
-app.on('web-contents-created', (_, contents) => {
   contents.on('will-navigate', (event, navigationUrl) => {
-    const parsedUrl = new URL(navigationUrl)
-
-    if (parsedUrl.origin !== contents.getURL()) {
+    try {
+      const target = new URL(navigationUrl)
+      const current = new URL(contents.getURL())
+      if (target.origin !== current.origin) {
+        event.preventDefault()
+        shell.openExternal(navigationUrl)
+      }
+    } catch (err) {
+      writeLog('debug', `External link failed: ${err}`)
       event.preventDefault()
     }
   })

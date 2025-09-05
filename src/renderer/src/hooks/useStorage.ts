@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Schema } from '../types'
+import { Schema } from '@shared/schema'
 import { storage, DEFAULT_DATA } from '../services/storage'
 
 export function useStorage() {
@@ -37,10 +37,13 @@ export function useStorage() {
   }, [])
 
   // 更新部分数据
-  const updateData = useCallback(async (partialData: Partial<Schema>) => {
-    const newData = { ...data, ...partialData }
-    await saveData(newData)
-  }, [data, saveData])
+  const updateData = useCallback(
+    async (partialData: Partial<Schema>) => {
+      const newData = { ...data, ...partialData }
+      await saveData(newData)
+    },
+    [data, saveData]
+  )
 
   // 重置数据
   const resetData = useCallback(async () => {
@@ -61,4 +64,4 @@ export function useStorage() {
     resetData,
     reloadData: loadData
   }
-} 
+}

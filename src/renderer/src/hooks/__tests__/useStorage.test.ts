@@ -1,8 +1,8 @@
-import { renderHook, act } from '@testing-library/react'
+import { renderHook, act, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { useStorage } from '../useStorage'
 import { storage, DEFAULT_DATA } from '../../services/storage'
-import { Schema } from '../../types'
+import { Schema } from '@shared/schema'
 
 // Mock storage service
 vi.mock('../../services/storage', () => ({
@@ -45,8 +45,8 @@ vi.mock('../../services/storage', () => ({
 }))
 
 // 使用 unknown 进行安全类型转换
-const mockedRead = (storage.read as unknown) as ReturnType<typeof vi.fn<[], Promise<Schema>>>
-const mockedWrite = (storage.write as unknown) as ReturnType<typeof vi.fn<[Schema], Promise<void>>>
+const mockedRead = storage.read as unknown as ReturnType<typeof vi.fn<[], Promise<Schema>>>
+const mockedWrite = storage.write as unknown as ReturnType<typeof vi.fn<[Schema], Promise<void>>>
 
 describe('useStorage', () => {
   beforeEach(() => {
@@ -61,12 +61,10 @@ describe('useStorage', () => {
     expect(result.current.isLoading).toBe(true)
     expect(mockedRead).toHaveBeenCalledTimes(1)
 
-    await act(async () => {
-      await vi.runAllTimersAsync()
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
     })
-
     expect(result.current.data).toEqual(DEFAULT_DATA)
-    expect(result.current.isLoading).toBe(false)
     expect(result.current.error).toBeNull()
   })
 
@@ -130,12 +128,10 @@ describe('useStorage', () => {
 
     const { result } = renderHook(() => useStorage())
 
-    await act(async () => {
-      await vi.runAllTimersAsync()
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
     })
-
     expect(result.current.error).toEqual(error)
-    expect(result.current.isLoading).toBe(false)
   })
 
   it('should handle errors during save', async () => {
@@ -155,4 +151,4 @@ describe('useStorage', () => {
     expect(result.current.error).toEqual(error)
     expect(result.current.isLoading).toBe(false)
   })
-}) 
+})

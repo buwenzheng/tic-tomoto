@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { storage } from '@/services/storage'
 import { useTheme } from '@/hooks/useTheme'
-import { Settings, ThemeMode, TimerMode, Schema } from '@/types'
+import { DEFAULT_DATA } from '@shared/schema'
 
 interface AppInitializerProps {
   children: React.ReactNode
@@ -12,42 +12,7 @@ interface InitializationError {
   message: string
 }
 
-// 默认设置
-const DEFAULT_SETTINGS: Settings = {
-  workDuration: 25,
-  shortBreakDuration: 5,
-  longBreakDuration: 15,
-  autoStartBreaks: false,
-  autoStartPomodoros: false,
-  longBreakInterval: 4,
-  alarmSound: 'bell',
-  alarmVolume: 0.8,
-  tickingSound: 'none',
-  tickingVolume: 0.5,
-  darkMode: 'system' as ThemeMode,
-  minimizeToTray: true
-}
-
-// 默认数据
-const DEFAULT_DATA: Schema = {
-  tasks: [],
-  timer: {
-    mode: TimerMode.WORK,
-    timeLeft: 25 * 60,
-    totalTime: 25 * 60,
-    isRunning: false,
-    isPaused: false
-  },
-  settings: DEFAULT_SETTINGS,
-  stats: {
-    totalPomodoros: 0,
-    totalWorkTime: 0,
-    dailyPomodoros: {},
-    weeklyPomodoros: {},
-    monthlyPomodoros: {}
-  },
-  version: 1
-}
+// 使用共享 DEFAULT_DATA 作为复位数据来源
 
 export const AppInitializer: React.FC<AppInitializerProps> = ({ children }) => {
   const [isInitialized, setIsInitialized] = useState(false)
@@ -70,10 +35,7 @@ export const AppInitializer: React.FC<AppInitializerProps> = ({ children }) => {
         if (window.tomatoAPI?.system?.registerGlobalShortcut) {
           try {
             // 注册全局快捷键
-            window.tomatoAPI.system.registerGlobalShortcut('CommandOrControl+Shift+T', () => {
-              // 触发计时器开始/暂停
-              document.dispatchEvent(new CustomEvent('toggle-timer'))
-            })
+            window.tomatoAPI.system.registerGlobalShortcut('CommandOrControl+Shift+T')
           } catch (shortcutError) {
             console.warn('Failed to register global shortcut:', shortcutError)
             // 快捷键注册失败不影响应用继续运行
@@ -83,11 +45,9 @@ export const AppInitializer: React.FC<AppInitializerProps> = ({ children }) => {
         setIsInitialized(true)
       } catch (error) {
         console.error('Failed to initialize app:', error)
-        
+
         // 确保错误消息是字符串
-        const errorMessage = error instanceof Error 
-          ? error.message 
-          : '应用初始化失败'
+        const errorMessage = error instanceof Error ? error.message : '应用初始化失败'
 
         setError({
           type: errorMessage.toLowerCase().includes('storage')
@@ -185,4 +145,3 @@ export const AppInitializer: React.FC<AppInitializerProps> = ({ children }) => {
 
   return <>{children}</>
 }
- 

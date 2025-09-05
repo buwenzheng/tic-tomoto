@@ -18,9 +18,9 @@ module.exports = {
         'ci'        // CI配置相关
       ]
     ],
-    'type-case': [2, 'always', 'lower'],
+    'type-case': [2, 'always', 'lowercase'],
     'type-empty': [2, 'never'],
-    'scope-case': [2, 'always', 'lower'],
+    'scope-case': [2, 'always', 'lowercase'],
     'subject-empty': [2, 'never'],
     'subject-full-stop': [2, 'never', '.'],
     'header-max-length': [2, 'always', 72]

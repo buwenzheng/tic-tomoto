@@ -188,6 +188,7 @@ export const useTaskStore = create<TaskStore>()(
           set((draft) => {
             draft.error = error instanceof Error ? error.message : '更新任务失败'
           })
+          throw error
         }
       },
 
@@ -206,24 +207,41 @@ export const useTaskStore = create<TaskStore>()(
           set((draft) => {
             draft.error = error instanceof Error ? error.message : '更新任务失败'
           })
+          throw error
         }
       },
 
-      // 重排序任务
-      reorderTasks: async (tasks: Task[]) => {
+      // 重排序任务（支持部分列表重排：例如当前过滤视图）
+      reorderTasks: async (subsetNewOrder: Task[]) => {
         try {
           const data = await storage.read()
-          // 更新任务顺序
-          const updatedTasks = tasks.map((task) => ({
-            ...task,
-            updatedAt: new Date()
-          }))
-          
-          data.tasks = updatedTasks
+          const original = data.tasks as Task[]
+          const subsetIdToOrder = new Map<string, number>()
+          subsetNewOrder.forEach((t, i) => subsetIdToOrder.set(t.id, i))
+
+          const originalIndex = new Map<string, number>()
+          original.forEach((t, i) => originalIndex.set(t.id, i))
+
+          const updated = original
+            .slice()
+            .sort((a, b) => {
+              const ia = subsetIdToOrder.has(a.id)
+                ? (subsetIdToOrder.get(a.id) as number)
+                : Number.POSITIVE_INFINITY
+              const ib = subsetIdToOrder.has(b.id)
+                ? (subsetIdToOrder.get(b.id) as number)
+                : Number.POSITIVE_INFINITY
+              if (ia !== ib) return ia - ib
+              // 保持未变更部分原有相对顺序
+              return (originalIndex.get(a.id) as number) - (originalIndex.get(b.id) as number)
+            })
+            .map((t) => ({ ...t, updatedAt: new Date() }))
+
+          data.tasks = updated
           await storage.write(data)
 
           set((draft) => {
-            draft.tasks = updatedTasks
+            draft.tasks = updated
           })
         } catch (error) {
           set((draft) => {

@@ -7,7 +7,13 @@ export default defineConfig({
     build: {
       outDir: 'out/main'
     },
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin()],
+    resolve: {
+      alias: {
+        '@': resolve('src/main/src'),
+        '@shared': resolve('src/shared')
+      }
+    }
   },
   preload: {
     build: {
@@ -24,10 +30,10 @@ export default defineConfig({
   renderer: {
     resolve: {
       alias: {
-        '@': resolve('src/renderer/src')
+        '@': resolve('src/renderer/src'),
+        '@shared': resolve('src/shared')
       }
     },
     plugins: [react()]
   }
 })
- 

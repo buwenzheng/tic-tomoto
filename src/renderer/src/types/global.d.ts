@@ -13,6 +13,14 @@ interface TomatoAPI {
     write: (data: any) => Promise<boolean>
   }
 
+  backup?: {
+    list: () => Promise<string[]>
+    create: () => Promise<{ success: boolean; filename?: string }>
+    restore: (filename: string) => Promise<{ success: boolean }>
+    onRestored: (cb: () => void) => void
+    openFolder: () => Promise<boolean>
+  }
+
   // 窗口控制API
   window: {
     setAlwaysOnTop: (alwaysOnTop: boolean) => void
@@ -39,7 +47,7 @@ interface TomatoAPI {
         urgency?: 'normal' | 'critical' | 'low'
       }
     ) => void
-    registerGlobalShortcut: (accelerator: string, callback: () => void) => void
+    registerGlobalShortcut: (accelerator: string) => void
     unregisterGlobalShortcut: (accelerator: string) => void
     unregisterAllShortcuts: () => void
     playSound: (soundPath: string, volume?: number) => void
@@ -69,8 +77,18 @@ interface TomatoAPI {
     toggleDevTools: () => void
   }
 
+  update?: {
+    check: () => void
+    quitAndInstall: () => void
+    onAvailable: (cb: () => void) => void
+    onNotAvailable: (cb: () => void) => void
+    onError: (cb: (_: unknown, message: string) => void) => void
+    onProgress: (cb: (_: unknown, info: any) => void) => void
+    onDownloaded: (cb: () => void) => void
+  }
+
   // 平台信息
-  platform: string,
+  platform: string
   versions: Omit<NodeJS.ProcessVersions, 'app'> & {
     app: Promise<string>
   }
@@ -92,4 +110,3 @@ interface Window {
   isTaskStoreInitialized?: boolean
   isTimerInitialized?: boolean
 }
- 
