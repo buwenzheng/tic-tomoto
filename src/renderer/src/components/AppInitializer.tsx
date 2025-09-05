@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { storage } from '@/services/storage'
 import { useTheme } from '@/hooks/useTheme'
 import { DEFAULT_DATA } from '@shared/schema'
+import { LoadingState, ErrorState } from '@/components/LoadingState'
 
 interface AppInitializerProps {
   children: React.ReactNode
@@ -87,45 +88,43 @@ export const AppInitializer: React.FC<AppInitializerProps> = ({ children }) => {
   }, [setTheme])
 
   if (error) {
+    const errorType =
+      error.type === 'storage' ? 'storage' : error.type === 'theme' ? 'unknown' : 'unknown'
+
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center mx-auto mb-4">
-            <span className="text-white text-lg">!</span>
-          </div>
-          <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-            {error.type === 'storage'
+        <ErrorState
+          title={
+            error.type === 'storage'
               ? '存储初始化失败'
               : error.type === 'theme'
                 ? '主题初始化失败'
-                : '应用初始化失败'}
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{error.message}</p>
-          <div className="space-y-2">
+                : '应用初始化失败'
+          }
+          message={error.message}
+          type={errorType}
+          size="lg"
+          onRetry={() => window.location.reload()}
+          className="max-w-md"
+        />
+        {error.type === 'storage' && (
+          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
             <button
-              onClick={() => window.location.reload()}
-              className="w-full px-4 py-2 bg-primary-500 text-white rounded hover:bg-primary-600 transition-colors"
+              onClick={async () => {
+                try {
+                  localStorage.clear()
+                  await storage.write(DEFAULT_DATA)
+                  window.location.reload()
+                } catch (resetError) {
+                  console.error('Failed to reset storage:', resetError)
+                }
+              }}
+              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors text-sm"
             >
-              重试
+              重置所有数据
             </button>
-            {error.type === 'storage' && (
-              <button
-                onClick={async () => {
-                  try {
-                    localStorage.clear()
-                    await storage.write(DEFAULT_DATA)
-                    window.location.reload()
-                  } catch (resetError) {
-                    console.error('Failed to reset storage:', resetError)
-                  }
-                }}
-                className="w-full px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
-              >
-                重置数据
-              </button>
-            )}
           </div>
-        </div>
+        )}
       </div>
     )
   }
@@ -133,12 +132,7 @@ export const AppInitializer: React.FC<AppInitializerProps> = ({ children }) => {
   if (!isInitialized) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-orange-500 rounded-lg flex items-center justify-center mx-auto mb-4">
-            <span className="text-white text-lg">🍅</span>
-          </div>
-          <div className="shimmer w-32 h-4 rounded mx-auto"></div>
-        </div>
+        <LoadingState type="default" message="正在初始化应用..." size="lg" />
       </div>
     )
   }

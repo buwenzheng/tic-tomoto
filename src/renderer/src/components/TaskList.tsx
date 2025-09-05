@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion'
 import { Plus, Edit2, Trash2, Play, CheckCircle2, Circle, Filter, GripVertical } from 'lucide-react'
 import { TaskPriority } from '@/types'
@@ -7,6 +7,19 @@ import { useTaskStore, useFilteredTasks, useTaskStats } from '@/stores/taskStore
 import { useTimerStore } from '@/stores/timerStore'
 import clsx from 'clsx'
 import { useNavigate } from 'react-router-dom'
+import { throttle } from 'lodash-es'
+import { StateManager } from '@/components/LoadingState'
+import { SimpleErrorBoundary } from '@/components/ErrorBoundary'
+
+// 优先级颜色映射（移出组件外避免重复创建）
+const PRIORITY_COLORS = {
+  low: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+  medium: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
+  high: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200'
+} as const
+
+// 大列表虚拟化阈值
+const VIRTUALIZATION_THRESHOLD = 50
 
 // 任务项组件
 interface TaskItemProps {
@@ -16,40 +29,59 @@ interface TaskItemProps {
   onToggleComplete: (id: string) => void
   onStartPomodoro: (id: string) => void
   isDragging?: boolean
+  isVirtualized?: boolean
+  style?: React.CSSProperties
 }
 
-const TaskItem: React.FC<TaskItemProps> = ({
+const TaskItem = React.memo<TaskItemProps>(function TaskItem({
   task,
   onEdit,
   onDelete,
   onToggleComplete,
   onStartPomodoro,
-  isDragging
-}) => {
+  isDragging,
+  isVirtualized,
+  style
+}) {
   const dragControls = useDragControls()
+  const [isLocalDragging, setIsLocalDragging] = useState(false)
 
-  const priorityColors = {
-    low: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
-    medium: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
-    high: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200'
-  }
+  // 使用 useCallback 优化拖拽处理函数
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault()
+      setIsLocalDragging(true)
+      dragControls.start(e)
+    },
+    [dragControls]
+  )
+
+  const handleDragEnd = useCallback(() => {
+    setIsLocalDragging(false)
+  }, [])
 
   return (
     <Reorder.Item
       value={task}
+      style={style}
       className={clsx(
-        'group flex items-center gap-4 p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-colors',
-        isDragging ? 'shadow-lg' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+        'group flex items-center gap-4 p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-all duration-200',
+        (isDragging || isLocalDragging) && 'shadow-lg ring-2 ring-primary-500/20 scale-[1.02]',
+        !isDragging && !isLocalDragging && 'hover:bg-gray-50 dark:hover:bg-gray-700/50',
+        isVirtualized && 'absolute w-full'
       )}
       dragListener={false}
       dragControls={dragControls}
+      onDragEnd={handleDragEnd}
+      whileDrag={{
+        scale: 1.02,
+        rotate: 1,
+        transition: { type: 'spring', damping: 15 }
+      }}
     >
       <button
         className="cursor-grab active:cursor-grabbing text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400"
-        onPointerDown={(e) => {
-          e.preventDefault()
-          dragControls.start(e)
-        }}
+        onPointerDown={handlePointerDown}
       >
         <GripVertical className="w-4 h-4" />
       </button>
@@ -88,7 +120,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
           <span
             className={clsx(
               'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
-              priorityColors[task.priority]
+              PRIORITY_COLORS[task.priority]
             )}
           >
             {task.priority}
@@ -130,7 +162,7 @@ const TaskItem: React.FC<TaskItemProps> = ({
       </div>
     </Reorder.Item>
   )
-}
+})
 
 // 任务表单组件
 interface TaskFormProps {
@@ -220,7 +252,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, isOpen, onClose, onSubmit }) 
               <label className="block text-sm font-medium mb-2">优先级</label>
               <select
                 value={formData.priority}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                   setFormData({ ...formData, priority: e.target.value as TaskPriority })
                 }
                 className="input"
@@ -238,7 +270,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, isOpen, onClose, onSubmit }) 
                 min="1"
                 max="20"
                 value={formData.estimatedPomodoros}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setFormData({ ...formData, estimatedPomodoros: parseInt(e.target.value) || 1 })
                 }
                 className="input"
@@ -264,6 +296,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, isOpen, onClose, onSubmit }) 
 const TaskList: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | undefined>()
+  const [isDragging, setIsDragging] = useState(false)
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null)
 
   const {
     loading,
@@ -283,6 +317,9 @@ const TaskList: React.FC = () => {
   const stats = useTaskStats()
   const navigate = useNavigate()
 
+  // 检查是否需要虚拟化
+  const shouldVirtualize = filteredTasks.length > VIRTUALIZATION_THRESHOLD
+
   useEffect(() => {
     // 使用全局标记避免重复初始化
     if (!window.isTaskStoreInitialized) {
@@ -291,40 +328,75 @@ const TaskList: React.FC = () => {
     }
   }, [initialize])
 
-  const handleCreateTask = async (data: TaskFormData): Promise<void> => {
-    await createTask(data)
-  }
+  const handleCreateTask = useCallback(
+    async (data: TaskFormData): Promise<void> => {
+      await createTask(data)
+    },
+    [createTask]
+  )
 
-  const handleUpdateTask = async (data: TaskFormData): Promise<void> => {
-    if (editingTask) {
-      await updateTask(editingTask.id, data)
-      setEditingTask(undefined)
-    }
-  }
+  const handleUpdateTask = useCallback(
+    async (data: TaskFormData): Promise<void> => {
+      if (editingTask) {
+        await updateTask(editingTask.id, data)
+        setEditingTask(undefined)
+      }
+    },
+    [editingTask, updateTask]
+  )
 
-  const handleEdit = (task: Task): void => {
+  const handleEdit = useCallback((task: Task): void => {
     setEditingTask(task)
     setIsFormOpen(true)
-  }
+  }, [])
 
-  const handleStartPomodoro = (taskId: string): void => {
-    setCurrentTask(taskId)
-    navigate('timer')
-  }
+  const handleStartPomodoro = useCallback(
+    (taskId: string): void => {
+      setCurrentTask(taskId)
+      navigate('timer')
+    },
+    [setCurrentTask, navigate]
+  )
 
-  const handleToggleComplete = async (taskId: string): Promise<void> => {
-    await completeTask(taskId)
-  }
+  const handleToggleComplete = useCallback(
+    async (taskId: string): Promise<void> => {
+      await completeTask(taskId)
+    },
+    [completeTask]
+  )
 
-  const handleDelete = async (taskId: string): Promise<void> => {
-    if (confirm('确定要删除这个任务吗？')) {
-      await deleteTask(taskId)
-    }
-  }
+  const handleDelete = useCallback(
+    async (taskId: string): Promise<void> => {
+      if (confirm('确定要删除这个任务吗？')) {
+        await deleteTask(taskId)
+      }
+    },
+    [deleteTask]
+  )
 
-  const handleReorder = async (reorderedTasks: Task[]): Promise<void> => {
-    await reorderTasks(reorderedTasks)
-  }
+  // 创建节流版本的重排序函数，减少频繁更新
+  const throttledReorderTasks = useMemo(
+    () =>
+      throttle(async (tasks: Task[]) => {
+        await reorderTasks(tasks)
+        setIsDragging(false)
+        setDraggedTaskId(null)
+      }, 200),
+    [reorderTasks]
+  )
+
+  const handleReorder = useCallback(
+    (reorderedTasks: Task[]): void => {
+      // 立即更新UI状态（乐观更新）
+      throttledReorderTasks(reorderedTasks)
+    },
+    [throttledReorderTasks]
+  )
+
+  const handleFormClose = useCallback(() => {
+    setIsFormOpen(false)
+    setEditingTask(undefined)
+  }, [])
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -390,39 +462,78 @@ const TaskList: React.FC = () => {
 
       {/* 任务列表 */}
       <div className="card">
-        {loading && (
-          <div className="p-8 text-center">
-            <div className="shimmer w-full h-20 rounded"></div>
-          </div>
-        )}
-
-        {error && <div className="p-4 text-red-600 dark:text-red-400 text-center">{error}</div>}
-
-        {!loading && !error && filteredTasks.length === 0 && (
-          <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-            {filter === 'all' ? '还没有任务，创建一个开始吧！' : '没有符合条件的任务'}
-          </div>
-        )}
-
-        <Reorder.Group
-          axis="y"
-          values={filteredTasks}
-          onReorder={handleReorder}
-          className="divide-y divide-gray-200 dark:divide-gray-700"
+        <StateManager
+          loading={loading}
+          error={error}
+          empty={!loading && !error && filteredTasks.length === 0}
+          loadingProps={{
+            type: 'skeleton',
+            message: '加载任务中...'
+          }}
+          errorProps={{
+            title: '任务加载失败',
+            onRetry: () => window.location.reload()
+          }}
+          emptyProps={{
+            title: filter === 'all' ? '还没有任务' : '没有符合条件的任务',
+            message:
+              filter === 'all'
+                ? '创建你的第一个番茄钟任务，开始高效工作！'
+                : '尝试调整筛选条件或创建新任务',
+            action:
+              filter === 'all'
+                ? {
+                    label: '创建任务',
+                    onClick: () => setIsFormOpen(true)
+                  }
+                : undefined,
+            icon: (
+              <div className="w-16 h-16 bg-gradient-to-br from-red-100 to-orange-100 dark:from-red-900/20 dark:to-orange-900/20 rounded-full flex items-center justify-center">
+                <span className="text-2xl">🍅</span>
+              </div>
+            )
+          }}
         >
-          <AnimatePresence>
-            {filteredTasks.map((task) => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onToggleComplete={handleToggleComplete}
-                onStartPomodoro={handleStartPomodoro}
-              />
-            ))}
-          </AnimatePresence>
-        </Reorder.Group>
+          <SimpleErrorBoundary>
+            <Reorder.Group
+              axis="y"
+              values={filteredTasks}
+              onReorder={handleReorder}
+              className={clsx(
+                'divide-y divide-gray-200 dark:divide-gray-700',
+                shouldVirtualize && 'relative',
+                isDragging && 'select-none'
+              )}
+              style={
+                shouldVirtualize ? { height: Math.min(filteredTasks.length * 80, 600) } : undefined
+              }
+            >
+              <AnimatePresence>
+                {filteredTasks.map((task, index) => (
+                  <TaskItem
+                    key={task.id}
+                    task={task}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onToggleComplete={handleToggleComplete}
+                    onStartPomodoro={handleStartPomodoro}
+                    isDragging={draggedTaskId === task.id}
+                    isVirtualized={shouldVirtualize}
+                    style={
+                      shouldVirtualize
+                        ? {
+                            top: index * 80,
+                            height: 80,
+                            zIndex: draggedTaskId === task.id ? 10 : 1
+                          }
+                        : undefined
+                    }
+                  />
+                ))}
+              </AnimatePresence>
+            </Reorder.Group>
+          </SimpleErrorBoundary>
+        </StateManager>
       </div>
 
       {/* 任务表单 */}
@@ -430,10 +541,7 @@ const TaskList: React.FC = () => {
         <TaskForm
           task={editingTask}
           isOpen={isFormOpen}
-          onClose={() => {
-            setIsFormOpen(false)
-            setEditingTask(undefined)
-          }}
+          onClose={handleFormClose}
           onSubmit={editingTask ? handleUpdateTask : handleCreateTask}
         />
       </AnimatePresence>

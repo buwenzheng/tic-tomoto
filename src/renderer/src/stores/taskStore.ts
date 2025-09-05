@@ -4,6 +4,8 @@ import { subscribeWithSelector } from 'zustand/middleware'
 import type { Task, TaskFormData, TaskPriority } from '@/types'
 import { storage } from '@/services/storage'
 import { useMemo } from 'react'
+import { debounce } from 'lodash-es'
+import { validateTask, fixTaskData } from '@shared/schema'
 
 // 任务Store接口
 interface TaskStore {
@@ -51,6 +53,30 @@ const PRIORITY_WEIGHTS = {
   high: 3
 } as Record<TaskPriority, number>
 
+// 防抖持久化任务数据，避免频繁写入
+const debouncedPersistTasks = debounce(async (tasks: Task[]) => {
+  try {
+    const data = await storage.read()
+    await storage.write({
+      ...data,
+      tasks
+    })
+  } catch (error) {
+    console.error('Failed to persist tasks:', error)
+  }
+}, 300) // 300ms 防抖延迟
+
+// 批量操作助手函数（预留，暂未使用）
+// const batchTaskOperations = async (operations: Array<() => void>): Promise<Task[]> => {
+//   const data = await storage.read()
+//   const updatedTasks = [...data.tasks]
+//
+//   // 在内存中执行所有操作
+//   operations.forEach(operation => operation())
+//
+//   return updatedTasks
+// }
+
 export const useTaskStore = create<TaskStore>()(
   subscribeWithSelector(
     immer((set, get) => ({
@@ -84,7 +110,7 @@ export const useTaskStore = create<TaskStore>()(
         }
       },
 
-      // 创建任务
+      // 创建任务（优化版本，减少存储访问，包含数据校验）
       createTask: async (taskData: TaskFormData) => {
         set((draft) => {
           draft.loading = true
@@ -92,23 +118,44 @@ export const useTaskStore = create<TaskStore>()(
         })
 
         try {
-          const data = await storage.read()
-          const newTask: Task = {
+          const rawTask: Partial<Task> = {
             id: crypto.randomUUID(),
             ...taskData,
+            status: 'pending',
             completedPomodoros: 0,
             isCompleted: false,
-            createdAt: new Date(),
-            updatedAt: new Date()
+            createdAt: Date.now(),
+            updatedAt: Date.now()
           }
 
-          data.tasks.push(newTask)
-          await storage.write(data)
+          // 校验任务数据
+          const validatedTask = validateTask(rawTask)
+          if (!validatedTask) {
+            // 校验失败，尝试修复
+            console.warn('Task validation failed, attempting fix...')
+            const fixedTask = fixTaskData(rawTask)
 
+            // 先更新本地状态
+            set((draft) => {
+              draft.tasks.push(fixedTask)
+              draft.loading = false
+            })
+
+            // 使用防抖持久化
+            const currentTasks = get().tasks
+            debouncedPersistTasks(currentTasks)
+            return
+          }
+
+          // 校验成功，直接使用
           set((draft) => {
-            draft.tasks.push(newTask)
+            draft.tasks.push(validatedTask)
             draft.loading = false
           })
+
+          // 使用防抖持久化
+          const currentTasks = get().tasks
+          debouncedPersistTasks(currentTasks)
         } catch (error) {
           set((draft) => {
             draft.error = error instanceof Error ? error.message : '创建任务失败'
@@ -117,33 +164,40 @@ export const useTaskStore = create<TaskStore>()(
         }
       },
 
-      // 更新任务
+      // 更新任务（优化版本，包含数据校验）
       updateTask: async (id: string, updates: Partial<Task>) => {
         try {
-          const data = await storage.read()
-          const taskIndex = data.tasks.findIndex((task) => task.id === id)
+          const currentTasks = get().tasks
+          const taskIndex = currentTasks.findIndex((task) => task.id === id)
 
           if (taskIndex === -1) {
             throw new Error(`任务 ${id} 不存在`)
           }
 
-          const updatedTask = {
-            ...data.tasks[taskIndex],
+          const rawUpdatedTask = {
+            ...currentTasks[taskIndex],
             ...updates,
-            updatedAt: new Date()
+            updatedAt: Date.now()
           }
 
-          data.tasks[taskIndex] = updatedTask
-          await storage.write(data)
+          // 校验更新后的任务数据
+          const validatedTask = validateTask(rawUpdatedTask)
+          const finalTask = validatedTask || fixTaskData(rawUpdatedTask)
 
+          if (!validatedTask) {
+            console.warn('Updated task validation failed, data was fixed')
+          }
+
+          // 先更新本地状态
           set((draft) => {
-            const index = draft.tasks.findIndex((task) => task.id === id)
-            if (index !== -1) {
-              draft.tasks[index] = updatedTask
-            }
+            draft.tasks[taskIndex] = finalTask
           })
 
-          return updatedTask
+          // 使用防抖持久化
+          const newTasks = get().tasks
+          debouncedPersistTasks(newTasks)
+
+          return finalTask
         } catch (error) {
           set((draft) => {
             draft.error = error instanceof Error ? error.message : '更新任务失败'
@@ -152,16 +206,17 @@ export const useTaskStore = create<TaskStore>()(
         }
       },
 
-      // 删除任务
+      // 删除任务（优化版本）
       deleteTask: async (id: string) => {
         try {
-          const data = await storage.read()
-          data.tasks = data.tasks.filter((task) => task.id !== id)
-          await storage.write(data)
-
+          // 先更新本地状态
           set((draft) => {
             draft.tasks = draft.tasks.filter((task) => task.id !== id)
           })
+
+          // 使用防抖持久化
+          const newTasks = get().tasks
+          debouncedPersistTasks(newTasks)
         } catch (error) {
           set((draft) => {
             draft.error = error instanceof Error ? error.message : '删除任务失败'
@@ -178,7 +233,7 @@ export const useTaskStore = create<TaskStore>()(
 
           const updatedTask = await get().updateTask(id, {
             isCompleted: !task.isCompleted,
-            completedAt: !task.isCompleted ? new Date() : undefined
+            completedAt: !task.isCompleted ? Date.now() : undefined
           })
 
           return updatedTask
@@ -233,7 +288,7 @@ export const useTaskStore = create<TaskStore>()(
               // 保持未变更部分原有相对顺序
               return (originalIndex.get(a.id) as number) - (originalIndex.get(b.id) as number)
             })
-            .map((t) => ({ ...t, updatedAt: new Date() }))
+            .map((t) => ({ ...t, updatedAt: Date.now() }))
 
           data.tasks = updated
           await storage.write(data)
@@ -302,7 +357,7 @@ export const useTaskStore = create<TaskStore>()(
       markAllAsCompleted: async () => {
         try {
           const data = await storage.read()
-          const now = new Date()
+          const now = Date.now()
 
           const updatedTasks = data.tasks.map((task) =>
             task.isCompleted

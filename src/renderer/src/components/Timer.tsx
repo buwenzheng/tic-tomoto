@@ -1,10 +1,36 @@
-import React, { useEffect, useRef, useCallback } from 'react'
+import React, { useEffect, useRef, useCallback, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Play, Pause, Square, RotateCcw } from 'lucide-react'
 import { TimerMode } from '@/types'
 import { useTimerStore, formatTime, getProgress } from '@/stores/timerStore'
 import { useTaskStore } from '@/stores/taskStore'
 import clsx from 'clsx'
+
+// 模式颜色常量（避免重复计算）
+const MODE_COLORS = {
+  stroke: {
+    [TimerMode.WORK]: 'stroke-red-500',
+    [TimerMode.SHORT_BREAK]: 'stroke-cyan-500',
+    [TimerMode.LONG_BREAK]: 'stroke-purple-500'
+  },
+  bg: {
+    [TimerMode.WORK]: 'bg-red-500',
+    [TimerMode.SHORT_BREAK]: 'bg-cyan-500',
+    [TimerMode.LONG_BREAK]: 'bg-purple-500'
+  },
+  badge: {
+    [TimerMode.WORK]: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-400',
+    [TimerMode.SHORT_BREAK]: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-400',
+    [TimerMode.LONG_BREAK]:
+      'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-400'
+  }
+} as const
+
+const MODE_TEXT = {
+  [TimerMode.WORK]: '专注工作',
+  [TimerMode.SHORT_BREAK]: '短休息',
+  [TimerMode.LONG_BREAK]: '长休息'
+} as const
 
 // 环形进度条组件
 interface CircularProgressProps {
@@ -15,17 +41,20 @@ interface CircularProgressProps {
   isRunning: boolean
 }
 
-const CircularProgress: React.FC<CircularProgressProps> = ({ progress, size, strokeWidth, mode, isRunning }) => {
-  const radius = (size - strokeWidth) / 2
-  const circumference = radius * 2 * Math.PI
-  const strokeDashoffset = circumference * (1 - progress)
+const CircularProgress = React.memo<CircularProgressProps>(function CircularProgress({
+  progress,
+  size,
+  strokeWidth,
+  mode,
+  isRunning
+}) {
+  // 使用 useMemo 缓存计算结果
+  const radius = useMemo(() => (size - strokeWidth) / 2, [size, strokeWidth])
+  const circumference = useMemo(() => radius * 2 * Math.PI, [radius])
+  const strokeDashoffset = useMemo(() => circumference * (1 - progress), [circumference, progress])
 
-  const modeColor =
-    mode === TimerMode.WORK
-      ? 'stroke-red-500'
-      : mode === TimerMode.SHORT_BREAK
-        ? 'stroke-cyan-500'
-        : 'stroke-purple-500'
+  const modeColor = MODE_COLORS.stroke[mode]
+  const animationDotColor = MODE_COLORS.bg[mode]
 
   return (
     <div className="relative">
@@ -55,20 +84,13 @@ const CircularProgress: React.FC<CircularProgressProps> = ({ progress, size, str
       {/* 动画点 */}
       {isRunning && (
         <motion.div
-          className={clsx(
-            'absolute w-3 h-3 rounded-full',
-            mode === TimerMode.WORK
-              ? 'bg-red-500'
-              : mode === TimerMode.SHORT_BREAK
-                ? 'bg-cyan-500'
-                : 'bg-purple-500'
-          )}
+          className={clsx('absolute w-3 h-3 rounded-full', animationDotColor)}
           style={{
             top: strokeWidth / 2,
             left: '50%',
             translateX: '-50%',
             rotate: `${progress * 360}deg`,
-            transformOrigin: '50% ${size / 2}px'
+            transformOrigin: `50% ${size / 2}px`
           }}
           animate={{ rotate: [0, 360] }}
           transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
@@ -76,7 +98,7 @@ const CircularProgress: React.FC<CircularProgressProps> = ({ progress, size, str
       )}
     </div>
   )
-}
+})
 
 // 主计时器组件
 const Timer: React.FC = () => {
@@ -127,7 +149,11 @@ const Timer: React.FC = () => {
 
     // 注册键盘快捷键
     const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !e.repeat && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
+      if (
+        e.code === 'Space' &&
+        !e.repeat &&
+        !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)
+      ) {
         e.preventDefault()
         handlePlayPause()
       }
@@ -146,18 +172,18 @@ const Timer: React.FC = () => {
     }
   }, [initialize, cleanup, handlePlayPause])
 
-  const progress = getProgress(timeLeft, totalTime)
-  const formattedTime = formatTime(timeLeft)
+  // 使用 useMemo 缓存计算结果，减少重复计算
+  const progress = useMemo(() => getProgress(timeLeft, totalTime), [timeLeft, totalTime])
+  const formattedTime = useMemo(() => formatTime(timeLeft), [timeLeft])
 
-  const modeText =
-    mode === TimerMode.WORK ? '专注工作' : mode === TimerMode.SHORT_BREAK ? '短休息' : '长休息'
-
-  const modeColor =
-    mode === TimerMode.WORK
-      ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-400'
-      : mode === TimerMode.SHORT_BREAK
-        ? 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-400'
-        : 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-400'
+  // 缓存模式相关的样式和文本
+  const modeInfo = useMemo(
+    () => ({
+      text: MODE_TEXT[mode],
+      color: MODE_COLORS.badge[mode]
+    }),
+    [mode]
+  )
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-theme(spacing.16))]">
@@ -173,8 +199,8 @@ const Timer: React.FC = () => {
           <span className="text-6xl font-bold text-gray-900 dark:text-gray-100 mb-2 font-mono">
             {formattedTime}
           </span>
-          <span className={clsx('px-3 py-1 rounded-full text-sm font-medium', modeColor)}>
-            {modeText}
+          <span className={clsx('px-3 py-1 rounded-full text-sm font-medium', modeInfo.color)}>
+            {modeInfo.text}
           </span>
           {currentTask && (
             <span className="mt-2 text-sm text-gray-600 dark:text-gray-400">
@@ -220,7 +246,7 @@ const Timer: React.FC = () => {
       {currentSession > 0 && (
         <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
           已完成 {currentSession} 个番茄钟
-      </div>
+        </div>
       )}
     </div>
   )

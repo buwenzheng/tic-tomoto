@@ -10,13 +10,13 @@ import {
   session
 } from 'electron'
 import { join } from 'path'
-import { readFile, writeFile, existsSync, mkdirSync, readdirSync, unlinkSync } from 'fs'
+import { readFile, writeFile, rename, existsSync, mkdirSync, readdirSync, unlinkSync } from 'fs'
 import { promisify } from 'util'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
 import icon from '../../resources/icon.png?asset'
 import { JSONFilePreset } from 'lowdb/node'
-import { Schema, DEFAULT_DATA, migrateData } from '@shared/schema'
+import { Schema, DEFAULT_DATA, validateAndMigrateData } from '@shared/schema'
 import { z } from 'zod'
 
 // ===============================
@@ -25,6 +25,7 @@ import { z } from 'zod'
 
 const readFileAsync = promisify(readFile)
 const writeFileAsync = promisify(writeFile)
+const renameAsync = promisify(rename)
 
 // 获取用户数据目录
 const getUserDataPath = (): string => {
@@ -42,20 +43,81 @@ const getUserDataPath = (): string => {
 // LowDB 数据库服务
 // ===============================
 
-// 数据库实例
-let db: any = null
+// 数据库管理器类，提供事务性操作
+class DatabaseManager {
+  private db: any = null
+  private writeLock = false
+  private writeQueue: Array<() => Promise<void>> = []
 
-// 初始化数据库
+  async initialize(): Promise<void> {
+    if (this.db) return
+
+    try {
+      const dbPath = join(getUserDataPath(), 'tic-tomoto-data.json')
+      this.db = await JSONFilePreset<Schema>(dbPath, DEFAULT_DATA)
+      console.log('Database initialized successfully')
+    } catch (error) {
+      console.error('Failed to initialize database:', error)
+      throw error
+    }
+  }
+
+  async safeRead(): Promise<Schema> {
+    await this.initialize()
+    return this.db.data
+  }
+
+  async safeWrite(operation: (data: Schema) => Schema | Promise<Schema>): Promise<boolean> {
+    return new Promise<boolean>((resolve, reject) => {
+      this.writeQueue.push(async () => {
+        try {
+          this.writeLock = true
+          await this.initialize()
+
+          const result = await operation(this.db.data)
+          this.db.data = result
+          await this.db.write()
+
+          resolve(true)
+        } catch (error) {
+          console.error('Database write error:', error)
+          reject(error)
+        } finally {
+          this.writeLock = false
+          this.processQueue()
+        }
+      })
+
+      if (!this.writeLock) {
+        this.processQueue()
+      }
+    })
+  }
+
+  private processQueue() {
+    if (this.writeQueue.length > 0 && !this.writeLock) {
+      const next = this.writeQueue.shift()!
+      next()
+    }
+  }
+
+  getData(): Schema {
+    return this.db?.data || DEFAULT_DATA
+  }
+}
+
+// 数据库管理器实例
+const dbManager = new DatabaseManager()
+
+// 兼容性函数
 async function initializeDatabase(): Promise<void> {
-  if (db) return
+  await dbManager.initialize()
+}
 
-  try {
-    const dbPath = join(getUserDataPath(), 'tic-tomoto-data.json')
-    db = await JSONFilePreset<Schema>(dbPath, DEFAULT_DATA)
-    console.log('Database initialized successfully')
-  } catch (error) {
-    console.error('Failed to initialize database:', error)
-    throw error
+// 兼容性访问
+const db = {
+  get data() {
+    return dbManager.getData()
   }
 }
 
@@ -288,11 +350,10 @@ function setupIpcHandlers(): void {
     }
   })
 
-  // 数据库API
+  // 数据库API（使用事务性操作）
   ipcMain.handle('db:read', async () => {
     try {
-      await initializeDatabase()
-      return db.data
+      return await dbManager.safeRead()
     } catch (error) {
       console.error('Error reading database:', error)
       return DEFAULT_DATA
@@ -301,10 +362,10 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle('db:write', async (_, data: Schema) => {
     try {
-      await initializeDatabase()
-      db.data = await migrateData(data)
-      await db.write()
-      return true
+      return await dbManager.safeWrite(async () => {
+        // 使用校验和迁移函数确保数据完整性
+        return validateAndMigrateData(data)
+      })
     } catch (error) {
       console.error('Error writing to database:', error)
       return false
@@ -336,13 +397,18 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle('backup:create', async () => {
     try {
-      await initializeDatabase()
+      const data = await dbManager.safeRead()
       const dir = getBackupDir()
       const now = new Date()
       const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
       const filename = `backup-${ts}.json`
       const filepath = join(dir, filename)
-      await writeFileAsync(filepath, JSON.stringify(db.data, null, 2), 'utf-8')
+      const tempFilepath = `${filepath}.tmp`
+
+      // 原子性写入：先写临时文件再重命名
+      await writeFileAsync(tempFilepath, JSON.stringify(data, null, 2), 'utf-8')
+      await renameAsync(tempFilepath, filepath)
+
       // 保留最近 10 份
       const files = readdirSync(dir)
         .filter((f) => backupFilenameSchema.safeParse(f).success)
@@ -361,6 +427,18 @@ function setupIpcHandlers(): void {
       return { success: true, filename }
     } catch (err) {
       console.error('Error creating backup:', err)
+      // 清理可能的临时文件
+      try {
+        const dir = getBackupDir()
+        const now = new Date()
+        const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
+        const tempFilepath = join(dir, `backup-${ts}.json.tmp`)
+        if (existsSync(tempFilepath)) {
+          unlinkSync(tempFilepath)
+        }
+      } catch (cleanupErr) {
+        writeLog('debug', `Failed to cleanup temp backup file: ${cleanupErr}`)
+      }
       return { success: false }
     }
   })
@@ -372,12 +450,19 @@ function setupIpcHandlers(): void {
       const filepath = join(getBackupDir(), parsed.data)
       const content = await readFileAsync(filepath, 'utf-8')
       const data = JSON.parse(content)
-      await initializeDatabase()
-      db.data = migrateData(data)
-      await db.write()
-      // 通知渲染进程可自行刷新
-      if (mainWindow) mainWindow.webContents.send('backup:restored')
-      return { success: true }
+
+      // 使用事务性写入恢复数据（包含校验）
+      const success = await dbManager.safeWrite(async () => {
+        return validateAndMigrateData(data)
+      })
+
+      if (success) {
+        // 通知渲染进程可自行刷新
+        if (mainWindow) mainWindow.webContents.send('backup:restored')
+        return { success: true }
+      } else {
+        return { success: false }
+      }
     } catch (err) {
       console.error('Error restoring backup:', err)
       return { success: false }

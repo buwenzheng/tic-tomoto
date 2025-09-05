@@ -8,6 +8,7 @@ import { DEFAULT_DATA } from '@shared/schema'
 import { format } from 'date-fns'
 import { getISOWeek } from 'date-fns/getISOWeek'
 import { useCallback } from 'react'
+import { debounce } from 'lodash-es'
 
 // 计时器Store接口
 interface TimerStore extends TimerState {
@@ -42,6 +43,71 @@ const getTimeForMode = (mode: TimerMode): number => {
   }
 }
 
+// 防抖持久化函数，避免频繁写入存储
+const debouncedPersistTimer = debounce(async (timerState: Partial<TimerState>) => {
+  try {
+    const data = await storage.read()
+    await storage.write({
+      ...data,
+      timer: {
+        mode: timerState.mode!,
+        timeLeft: timerState.timeLeft!,
+        totalTime: timerState.totalTime!,
+        isRunning: timerState.isRunning!,
+        isPaused: timerState.isPaused!,
+        endAt: timerState.endAt
+      }
+    })
+  } catch (error) {
+    console.error('Failed to persist timer state:', error)
+  }
+}, 500) // 500ms 防抖延迟
+
+// 状态同步验证机制
+const syncTimerState = async (
+  get: () => TimerState,
+  set: (fn: (draft: TimerState) => void) => void
+) => {
+  try {
+    const persistedData = await storage.read()
+    const currentState = get()
+
+    // 检查是否需要同步
+    if (persistedData.timer && persistedData.timer.isRunning && currentState.isRunning) {
+      const now = Date.now()
+      const expectedTimeLeft = Math.max(0, Math.floor((persistedData.timer.endAt! - now) / 1000))
+
+      // 如果时间差异超过阈值（2秒），强制同步
+      if (Math.abs(expectedTimeLeft - currentState.timeLeft) > 2) {
+        console.warn('Timer drift detected, syncing state...')
+        set((draft) => {
+          draft.timeLeft = expectedTimeLeft
+          draft.endAt = persistedData.timer.endAt
+        })
+      }
+    }
+  } catch (error) {
+    console.error('Failed to sync timer state:', error)
+  }
+}
+
+// 定期同步检查（每5秒检查一次）
+let syncInterval: NodeJS.Timeout | null = null
+
+const startSyncCheck = (get: () => TimerState, set: (fn: (draft: TimerState) => void) => void) => {
+  if (syncInterval) clearInterval(syncInterval)
+  syncInterval = setInterval(() => {
+    syncTimerState(get, set)
+  }, 5000)
+}
+
+const stopSyncCheck = () => {
+  if (syncInterval) {
+    clearInterval(syncInterval)
+    syncInterval = null
+  }
+}
+
 export const useTimerStore = create<TimerStore>()(
   subscribeWithSelector(
     immer((set, get) => ({
@@ -61,29 +127,17 @@ export const useTimerStore = create<TimerStore>()(
         set((draft) => {
           draft.isRunning = true
           draft.isPaused = false
-          // 计算结束时间
+          // 计算结束时间，改进容错性
           const now = Date.now()
           draft.endAt = now + draft.timeLeft * 1000
         })
 
-        // 持久化当前状态
+        // 使用防抖持久化
         const state = get()
-        storage
-          .read()
-          .then((data) => {
-            storage.write({
-              ...data,
-              timer: {
-                mode: state.mode,
-                timeLeft: state.timeLeft,
-                totalTime: state.totalTime,
-                isRunning: state.isRunning,
-                isPaused: state.isPaused,
-                endAt: state.endAt
-              }
-            } as any)
-          })
-          .catch(() => {})
+        debouncedPersistTimer(state)
+
+        // 启动同步检查
+        startSyncCheck(get, set)
 
         if (window.tomatoAPI) {
           window.tomatoAPI.timer.startWorker(1000)
@@ -97,23 +151,12 @@ export const useTimerStore = create<TimerStore>()(
           draft.endAt = undefined
         })
 
+        // 停止同步检查
+        stopSyncCheck()
+
+        // 使用防抖持久化
         const state = get()
-        storage
-          .read()
-          .then((data) => {
-            storage.write({
-              ...data,
-              timer: {
-                mode: state.mode,
-                timeLeft: state.timeLeft,
-                totalTime: state.totalTime,
-                isRunning: state.isRunning,
-                isPaused: state.isPaused,
-                endAt: state.endAt
-              }
-            } as any)
-          })
-          .catch(() => {})
+        debouncedPersistTimer(state)
 
         if (window.tomatoAPI) {
           window.tomatoAPI.timer.stopWorker()
@@ -128,23 +171,12 @@ export const useTimerStore = create<TimerStore>()(
           draft.endAt = undefined
         })
 
+        // 停止同步检查
+        stopSyncCheck()
+
+        // 使用防抖持久化
         const state = get()
-        storage
-          .read()
-          .then((data) => {
-            storage.write({
-              ...data,
-              timer: {
-                mode: state.mode,
-                timeLeft: state.timeLeft,
-                totalTime: state.totalTime,
-                isRunning: state.isRunning,
-                isPaused: state.isPaused,
-                endAt: state.endAt
-              }
-            } as any)
-          })
-          .catch(() => {})
+        debouncedPersistTimer(state)
 
         if (window.tomatoAPI) {
           window.tomatoAPI.timer.stopWorker()
@@ -162,6 +194,10 @@ export const useTimerStore = create<TimerStore>()(
           draft.totalTime = newTime
           draft.endAt = undefined
         })
+
+        // 使用防抖持久化
+        const newState = get()
+        debouncedPersistTimer(newState)
       },
 
       setTimeLeft: (timeLeft: number) => {
@@ -203,6 +239,7 @@ export const useTimerStore = create<TimerStore>()(
           .read()
           .then((data) => {
             const now = new Date()
+            const nowTimestamp = now.getTime()
             const dailyKey = format(now, 'yyyy-MM-dd')
             const weekKey = `${format(now, 'yyyy')}-W${String(getISOWeek(now)).padStart(2, '0')}`
             const monthKey = format(now, 'yyyy-MM')
@@ -227,7 +264,7 @@ export const useTimerStore = create<TimerStore>()(
                   ...task,
                   completedPomodoros:
                     (task.completedPomodoros || 0) + (state.mode === TimerMode.WORK ? 1 : 0),
-                  updatedAt: now
+                  updatedAt: nowTimestamp
                 }
                 if (
                   state.mode === TimerMode.WORK &&
@@ -235,7 +272,7 @@ export const useTimerStore = create<TimerStore>()(
                   updated.completedPomodoros >= task.estimatedPomodoros
                 ) {
                   updated.isCompleted = true
-                  updated.completedAt = now
+                  updated.completedAt = nowTimestamp
                 }
                 data.tasks[idx] = updated
               }
@@ -324,13 +361,31 @@ export const useTimerStore = create<TimerStore>()(
               draft.endAt = typeof timer.endAt === 'number' ? timer.endAt : undefined
             })
 
-            // 如果存在 endAt，则用漂移修正计算剩余时间
+            // 改进的时间恢复逻辑，增强容错性
             const current = get()
             if (current.isRunning && current.endAt) {
-              const remainingMs = Math.max(0, current.endAt - Date.now())
-              set((draft) => {
-                draft.timeLeft = Math.ceil(remainingMs / 1000)
-              })
+              const now = Date.now()
+              const remainingMs = Math.max(0, current.endAt - now)
+              const newTimeLeft = Math.ceil(remainingMs / 1000)
+
+              // 检查时间是否合理（避免极端值）
+              if (newTimeLeft > 0 && newTimeLeft <= current.totalTime) {
+                set((draft) => {
+                  draft.timeLeft = newTimeLeft
+                })
+
+                // 恢复后启动同步检查
+                startSyncCheck(get, set)
+              } else {
+                // 时间不合理，重置计时器状态
+                console.warn('Timer state recovery failed, resetting...')
+                set((draft) => {
+                  draft.isRunning = false
+                  draft.isPaused = false
+                  draft.timeLeft = draft.totalTime
+                  draft.endAt = undefined
+                })
+              }
             }
           })
           .catch(() => {})
@@ -361,6 +416,9 @@ export const useTimerStore = create<TimerStore>()(
       },
 
       cleanup: () => {
+        // 停止同步检查
+        stopSyncCheck()
+
         if (window.tomatoAPI) {
           window.tomatoAPI.timer.stopWorker()
           window.tomatoAPI.timer.offTick()
