@@ -1,8 +1,7 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import { subscribeWithSelector } from 'zustand/middleware'
-import { TaskPriority } from '@/types'
-import type { Task, TaskFormData } from '@/types'
+import type { Task, TaskFormData, TaskPriority } from '@/types'
 import { storage } from '@/services/storage'
 import { useMemo } from 'react'
 
@@ -47,11 +46,10 @@ interface TaskStore {
 
 // 任务优先级权重 (用于排序)
 const PRIORITY_WEIGHTS = {
-  [TaskPriority.LOW]: 1,
-  [TaskPriority.MEDIUM]: 2,
-  [TaskPriority.HIGH]: 3,
-  [TaskPriority.URGENT]: 4
-}
+  low: 1,
+  medium: 2,
+  high: 3
+} as Record<TaskPriority, number>
 
 export const useTaskStore = create<TaskStore>()(
   subscribeWithSelector(

@@ -15,7 +15,7 @@ import { promisify } from 'util'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
 import icon from '../../resources/icon.png?asset'
-import { JSONFilePreset, LowDB } from 'lowdb/node'
+import { JSONFilePreset } from 'lowdb/node'
 import { Schema, DEFAULT_DATA, migrateData } from '@shared/schema'
 import { z } from 'zod'
 
@@ -43,7 +43,7 @@ const getUserDataPath = (): string => {
 // ===============================
 
 // 数据库实例
-let db: LowDB<Schema> | null = null
+let db: any = null
 
 // 初始化数据库
 async function initializeDatabase(): Promise<void> {
@@ -77,7 +77,10 @@ function initializeLogger(): void {
   }
 }
 
-async function writeLog(level: 'info' | 'warn' | 'error', message: string): Promise<void> {
+async function writeLog(
+  level: 'info' | 'warn' | 'error' | 'debug',
+  message: string
+): Promise<void> {
   try {
     if (!logFilePath) initializeLogger()
     const ts = new Date().toISOString()
@@ -643,7 +646,7 @@ app.whenReady().then(() => {
 
   // 托盘
   try {
-    tray = new Tray(process.platform === 'linux' ? icon : undefined)
+    tray = new Tray(icon)
     const contextMenu = Menu.buildFromTemplate([
       {
         label: '显示/隐藏',

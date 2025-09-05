@@ -1,11 +1,7 @@
 // 任务领域类型
 
-export enum TaskPriority {
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
-  URGENT = 'urgent'
-}
+export type TaskPriority = 'low' | 'medium' | 'high'
+export type TaskStatus = 'pending' | 'in-progress' | 'completed'
 
 export interface Task {
   id: string
@@ -16,10 +12,11 @@ export interface Task {
   estimatedPomodoros: number
   completedPomodoros: number
   isCompleted: boolean
-  createdAt: Date
-  updatedAt: Date
-  completedAt?: Date
+  createdAt: number
+  updatedAt: number
+  completedAt?: number
   tags?: string[]
+  status: TaskStatus
 }
 
 export interface TaskFormData {

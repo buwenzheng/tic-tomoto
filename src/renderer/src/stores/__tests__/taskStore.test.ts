@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useTaskStore } from '../taskStore'
-import { TaskPriority } from '@/types'
+// import { TaskPriority } from '@/types'
 
 vi.mock('@/services/storage', () => {
   const data = {
@@ -65,7 +65,7 @@ describe('taskStore', () => {
       title: 'Test',
       description: '',
       category: '',
-      priority: TaskPriority.MEDIUM,
+      priority: 'medium' as any,
       estimatedPomodoros: 1,
       tags: []
     })
@@ -83,7 +83,7 @@ describe('taskStore', () => {
       title: 'A',
       description: '',
       category: '',
-      priority: TaskPriority.MEDIUM,
+      priority: 'medium' as any,
       estimatedPomodoros: 1,
       tags: []
     })
@@ -91,7 +91,7 @@ describe('taskStore', () => {
       title: 'B',
       description: '',
       category: '',
-      priority: TaskPriority.MEDIUM,
+      priority: 'medium' as any,
       estimatedPomodoros: 1,
       tags: []
     })
@@ -99,7 +99,7 @@ describe('taskStore', () => {
       title: 'C',
       description: '',
       category: '',
-      priority: TaskPriority.MEDIUM,
+      priority: 'medium' as any,
       estimatedPomodoros: 1,
       tags: []
     })

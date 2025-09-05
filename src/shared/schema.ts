@@ -5,12 +5,15 @@ export interface Task {
   id: string
   title: string
   description?: string
+  category?: string
   priority: 'low' | 'medium' | 'high'
   status: 'pending' | 'in-progress' | 'completed'
   estimatedPomodoros: number
   completedPomodoros: number
+  isCompleted: boolean
   createdAt: number
   updatedAt: number
+  completedAt?: number
   tags?: string[]
 }
 
@@ -103,11 +106,24 @@ function migrateFromV0(oldData: Partial<Schema>): Schema {
   const newData: Schema = { ...DEFAULT_DATA }
 
   if (Array.isArray(oldData.tasks)) {
-    newData.tasks = oldData.tasks.map((task: Record<string, unknown>) => ({
-      ...task,
-      createdAt: task?.createdAt ?? new Date(),
-      updatedAt: task?.updatedAt ?? new Date()
-    }))
+    newData.tasks = oldData.tasks.map(
+      (task: any) =>
+        ({
+          id: task.id || Date.now().toString(),
+          title: task.title || 'Untitled Task',
+          description: task.description || '',
+          category: task.category || '',
+          priority: task.priority || 'medium',
+          status: task.status || 'pending',
+          estimatedPomodoros: task.estimatedPomodoros || 1,
+          completedPomodoros: task.completedPomodoros || 0,
+          isCompleted: task.isCompleted || false,
+          createdAt: task.createdAt || Date.now(),
+          updatedAt: task.updatedAt || Date.now(),
+          completedAt: task.completedAt,
+          tags: task.tags || []
+        }) as Task
+    )
   }
 
   if (oldData.timer && typeof oldData.timer === 'object') {

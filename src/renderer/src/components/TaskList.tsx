@@ -27,12 +27,11 @@ const TaskItem: React.FC<TaskItemProps> = ({
   isDragging
 }) => {
   const dragControls = useDragControls()
-  
+
   const priorityColors = {
-    [TaskPriority.LOW]: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
-    [TaskPriority.MEDIUM]: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
-    [TaskPriority.HIGH]: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200',
-    [TaskPriority.URGENT]: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
+    low: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+    medium: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
+    high: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200'
   }
 
   return (
@@ -51,47 +50,47 @@ const TaskItem: React.FC<TaskItemProps> = ({
           e.preventDefault()
           dragControls.start(e)
         }}
-    >
+      >
         <GripVertical className="w-4 h-4" />
       </button>
 
-        <button
-          onClick={() => onToggleComplete(task.id)}
+      <button
+        onClick={() => onToggleComplete(task.id)}
         className={clsx(
           'flex-shrink-0 w-6 h-6 rounded-full border-2 transition-colors',
           task.isCompleted
             ? 'border-green-500 bg-green-500 text-white hover:bg-green-600 hover:border-green-600'
             : 'border-gray-300 hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-500'
         )}
-        >
-          {task.isCompleted ? (
+      >
+        {task.isCompleted ? (
           <CheckCircle2 className="w-5 h-5" />
-          ) : (
+        ) : (
           <Circle className="w-5 h-5 opacity-0 group-hover:opacity-100" />
-          )}
-        </button>
+        )}
+      </button>
 
-        <div className="flex-1 min-w-0">
-            <h3
+      <div className="flex-1 min-w-0">
+        <h3
           className={clsx('text-base font-medium truncate', {
             'text-gray-900 dark:text-gray-100': !task.isCompleted,
             'text-gray-500 dark:text-gray-400 line-through': task.isCompleted
           })}
-            >
-              {task.title}
-            </h3>
+        >
+          {task.title}
+        </h3>
         {task.description && (
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 line-clamp-2">
             {task.description}
           </p>
         )}
         <div className="flex items-center gap-2 mt-2">
-            <span
-              className={clsx(
+          <span
+            className={clsx(
               'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
-                priorityColors[task.priority]
-              )}
-            >
+              priorityColors[task.priority]
+            )}
+          >
             {task.priority}
           </span>
           {task.category && (
@@ -101,34 +100,34 @@ const TaskItem: React.FC<TaskItemProps> = ({
           )}
           <span className="inline-flex items-center text-xs text-gray-500 dark:text-gray-400">
             {task.completedPomodoros}/{task.estimatedPomodoros} 番茄钟
-              </span>
-            </div>
+          </span>
         </div>
+      </div>
 
       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={() => onStartPomodoro(task.id)}
+        <button
+          onClick={() => onStartPomodoro(task.id)}
           className="p-2 text-green-600 hover:bg-green-100 rounded dark:text-green-400 dark:hover:bg-green-900/50"
-              title="开始番茄钟"
+          title="开始番茄钟"
           disabled={task.isCompleted}
-            >
-              <Play className="w-4 h-4" />
-            </button>
-          <button
-            onClick={() => onEdit(task)}
+        >
+          <Play className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => onEdit(task)}
           className="p-2 text-blue-600 hover:bg-blue-100 rounded dark:text-blue-400 dark:hover:bg-blue-900/50"
-            title="编辑"
-          >
-            <Edit2 className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => onDelete(task.id)}
+          title="编辑"
+        >
+          <Edit2 className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => onDelete(task.id)}
           className="p-2 text-red-600 hover:bg-red-100 rounded dark:text-red-400 dark:hover:bg-red-900/50"
-            title="删除"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
+          title="删除"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
     </Reorder.Item>
   )
 }
@@ -146,7 +145,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, isOpen, onClose, onSubmit }) 
     title: '',
     description: '',
     category: '',
-    priority: TaskPriority.MEDIUM,
+    priority: 'medium' as any,
     estimatedPomodoros: 1,
     tags: []
   })
@@ -166,7 +165,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, isOpen, onClose, onSubmit }) 
         title: '',
         description: '',
         category: '',
-        priority: TaskPriority.MEDIUM,
+        priority: 'medium' as any,
         estimatedPomodoros: 1,
         tags: []
       })
@@ -226,10 +225,9 @@ const TaskForm: React.FC<TaskFormProps> = ({ task, isOpen, onClose, onSubmit }) 
                 }
                 className="input"
               >
-                <option value={TaskPriority.LOW}>低优先级</option>
-                <option value={TaskPriority.MEDIUM}>中优先级</option>
-                <option value={TaskPriority.HIGH}>高优先级</option>
-                <option value={TaskPriority.URGENT}>紧急</option>
+                <option value="low">低优先级</option>
+                <option value="medium">中优先级</option>
+                <option value="high">高优先级</option>
               </select>
             </div>
 
@@ -412,18 +410,18 @@ const TaskList: React.FC = () => {
           onReorder={handleReorder}
           className="divide-y divide-gray-200 dark:divide-gray-700"
         >
-        <AnimatePresence>
-          {filteredTasks.map((task) => (
-            <TaskItem
-              key={task.id}
-              task={task}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onToggleComplete={handleToggleComplete}
-              onStartPomodoro={handleStartPomodoro}
-            />
-          ))}
-        </AnimatePresence>
+          <AnimatePresence>
+            {filteredTasks.map((task) => (
+              <TaskItem
+                key={task.id}
+                task={task}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onToggleComplete={handleToggleComplete}
+                onStartPomodoro={handleStartPomodoro}
+              />
+            ))}
+          </AnimatePresence>
         </Reorder.Group>
       </div>
 

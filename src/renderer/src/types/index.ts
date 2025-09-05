@@ -3,3 +3,6 @@
 export * from './task'
 export * from './timer'
 export * from './settings'
+
+// 重新导出常用类型以保持兼容性
+export type { TaskPriority, TaskStatus } from './task'
