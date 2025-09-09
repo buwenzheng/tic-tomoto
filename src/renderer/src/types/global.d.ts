@@ -1,3 +1,13 @@
+import type { Schema } from '@shared/schema'
+
+interface UpdateProgressInfo {
+  total: number
+  delta: number
+  transferred: number
+  percent: number
+  bytesPerSecond: number
+}
+
 interface TomatoAPI {
   // 文件系统API
   fs: {
@@ -7,10 +17,19 @@ interface TomatoAPI {
     getUserDataPath: () => Promise<string>
   }
 
+  // 日志API
+  log?: {
+    debug: (message: string, component?: string, meta?: Record<string, unknown>) => Promise<void>
+    info: (message: string, component?: string, meta?: Record<string, unknown>) => Promise<void>
+    warn: (message: string, component?: string, meta?: Record<string, unknown>) => Promise<void>
+    error: (message: string, component?: string, meta?: Record<string, unknown>) => Promise<void>
+    setLevel: (level: 'debug' | 'info' | 'warn' | 'error') => void
+  }
+
   // 数据库API
   db?: {
-    read: () => Promise<any>
-    write: (data: any) => Promise<boolean>
+    read: () => Promise<Schema>
+    write: (data: Schema) => Promise<boolean>
   }
 
   backup?: {
@@ -83,7 +102,7 @@ interface TomatoAPI {
     onAvailable: (cb: () => void) => void
     onNotAvailable: (cb: () => void) => void
     onError: (cb: (_: unknown, message: string) => void) => void
-    onProgress: (cb: (_: unknown, info: any) => void) => void
+    onProgress: (cb: (_: unknown, info: UpdateProgressInfo) => void) => void
     onDownloaded: (cb: () => void) => void
   }
 
@@ -98,12 +117,12 @@ interface Window {
   tomatoAPI: TomatoAPI
   electron: {
     ipcRenderer: {
-      send: (channel: string, ...args: any[]) => void
-      on: (channel: string, listener: (...args: any[]) => void) => void
-      once: (channel: string, listener: (...args: any[]) => void) => void
-      removeListener: (channel: string, listener: (...args: any[]) => void) => void
+      send: (channel: string, ...args: unknown[]) => void
+      on: (channel: string, listener: (...args: unknown[]) => void) => void
+      once: (channel: string, listener: (...args: unknown[]) => void) => void
+      removeListener: (channel: string, listener: (...args: unknown[]) => void) => void
       removeAllListeners: (channel: string) => void
-      invoke: (channel: string, ...args: any[]) => Promise<any>
+      invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
     }
   }
   // 全局状态标记

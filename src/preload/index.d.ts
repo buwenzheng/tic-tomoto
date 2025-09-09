@@ -1,4 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
+import type { Schema } from '@shared/schema'
 
 // ===============================
 // 番茄钟应用API类型定义
@@ -15,8 +16,8 @@ interface TomatoAPI {
 
   // 数据库API
   db: {
-    read: () => Promise<any>
-    write: (data: any) => Promise<boolean>
+    read: () => Promise<Schema>
+    write: (data: Schema) => Promise<boolean>
   }
 
   // 窗口控制API

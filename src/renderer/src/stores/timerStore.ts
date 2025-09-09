@@ -257,7 +257,7 @@ export const useTimerStore = create<TimerStore>()(
 
             // 任务联动：为当前任务累加番茄数，必要时标记完成
             if (state.currentTaskId) {
-              const idx = data.tasks.findIndex((t: any) => t.id === state.currentTaskId)
+              const idx = data.tasks.findIndex((t) => t.id === state.currentTaskId)
               if (idx !== -1) {
                 const task = data.tasks[idx]
                 const updated = {

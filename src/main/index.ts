@@ -10,10 +10,21 @@ import {
   session
 } from 'electron'
 import { join } from 'path'
-import { readFile, writeFile, rename, existsSync, mkdirSync, readdirSync, unlinkSync } from 'fs'
+import {
+  readFile,
+  writeFile,
+  rename,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  unlinkSync,
+  promises as fsPromises,
+  statSync
+} from 'fs'
 import { promisify } from 'util'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { autoUpdater } from 'electron-updater'
+import pkg from 'electron-updater'
+const { autoUpdater } = pkg
 import icon from '../../resources/icon.png?asset'
 import { JSONFilePreset } from 'lowdb/node'
 import { Schema, DEFAULT_DATA, validateAndMigrateData } from '@shared/schema'
@@ -45,7 +56,7 @@ const getUserDataPath = (): string => {
 
 // 数据库管理器类，提供事务性操作
 class DatabaseManager {
-  private db: any = null
+  private db: Awaited<ReturnType<typeof JSONFilePreset<Schema>>> | null = null
   private writeLock = false
   private writeQueue: Array<() => Promise<void>> = []
 
@@ -55,15 +66,20 @@ class DatabaseManager {
     try {
       const dbPath = join(getUserDataPath(), 'tic-tomoto-data.json')
       this.db = await JSONFilePreset<Schema>(dbPath, DEFAULT_DATA)
-      console.log('Database initialized successfully')
+      logger.info('Database initialized successfully', 'database')
     } catch (error) {
-      console.error('Failed to initialize database:', error)
+      logger.error('Failed to initialize database', 'database', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       throw error
     }
   }
 
   async safeRead(): Promise<Schema> {
     await this.initialize()
+    if (!this.db) {
+      throw new Error('Database not initialized')
+    }
     return this.db.data
   }
 
@@ -74,13 +90,19 @@ class DatabaseManager {
           this.writeLock = true
           await this.initialize()
 
+          if (!this.db) {
+            throw new Error('Database not initialized')
+          }
+
           const result = await operation(this.db.data)
           this.db.data = result
           await this.db.write()
 
           resolve(true)
         } catch (error) {
-          console.error('Database write error:', error)
+          logger.error('Database write error', 'database', {
+            error: error instanceof Error ? error.message : String(error)
+          })
           reject(error)
         } finally {
           this.writeLock = false
@@ -124,33 +146,188 @@ const db = {
 // 数据迁移由 @shared/schema 统一提供
 
 // ===============================
-// 简易日志记录（写入 userData/logs/app.log）
+// 高级日志系统（支持等级控制、轮转、结构化格式）
 // ===============================
 
-let logFilePath: string | null = null
+type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
-function initializeLogger(): void {
-  try {
-    const logsDir = join(getUserDataPath(), 'logs')
-    if (!existsSync(logsDir)) mkdirSync(logsDir, { recursive: true })
-    logFilePath = join(logsDir, 'app.log')
-  } catch (err) {
-    console.warn('Failed to initialize logger:', err)
+interface LogEntry {
+  timestamp: string
+  level: LogLevel
+  message: string
+  component?: string
+  meta?: Record<string, unknown>
+  pid?: number
+}
+
+class Logger {
+  private logLevel: LogLevel = 'info'
+  private maxFileSize = 10 * 1024 * 1024 // 10MB
+  private maxFiles = 5
+  private logsDir: string | null = null
+  private currentLogFile: string | null = null
+
+  constructor() {
+    this.initializeLogger()
+  }
+
+  private initializeLogger(): void {
+    try {
+      this.logsDir = join(getUserDataPath(), 'logs')
+      if (!existsSync(this.logsDir)) {
+        mkdirSync(this.logsDir, { recursive: true })
+      }
+      this.currentLogFile = join(this.logsDir, 'app.log')
+    } catch (err) {
+      console.warn('Failed to initialize logger:', err)
+    }
+  }
+
+  setLogLevel(level: LogLevel): void {
+    this.logLevel = level
+  }
+
+  private shouldLog(level: LogLevel): boolean {
+    const levels: LogLevel[] = ['debug', 'info', 'warn', 'error']
+    return levels.indexOf(level) >= levels.indexOf(this.logLevel)
+  }
+
+  private async rotateLogIfNeeded(): Promise<void> {
+    if (!this.currentLogFile || !this.logsDir) return
+
+    try {
+      const stats = await fsPromises.stat(this.currentLogFile).catch(() => null)
+      if (!stats || stats.size < this.maxFileSize) return
+
+      // 创建轮转文件名
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const rotatedFile = join(this.logsDir, `app-${timestamp}.log`)
+
+      // 重命名当前日志文件
+      await renameAsync(this.currentLogFile, rotatedFile)
+
+      // 清理旧日志文件
+      await this.cleanOldLogs()
+    } catch (err) {
+      console.warn('Failed to rotate log file:', err)
+    }
+  }
+
+  private async cleanOldLogs(): Promise<void> {
+    if (!this.logsDir) return
+
+    try {
+      const files = readdirSync(this.logsDir)
+        .filter((f) => f.startsWith('app-') && f.endsWith('.log'))
+        .map((f) => ({
+          name: f,
+          path: join(this.logsDir!, f),
+          stat: statSync(join(this.logsDir!, f))
+        }))
+        .sort((a, b) => b.stat.mtime.getTime() - a.stat.mtime.getTime())
+
+      // 保留最新的 maxFiles 个文件，删除其余文件
+      const filesToDelete = files.slice(this.maxFiles)
+      for (const file of filesToDelete) {
+        try {
+          unlinkSync(file.path)
+        } catch (err) {
+          console.warn(`Failed to delete old log file ${file.name}:`, err)
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to clean old logs:', err)
+    }
+  }
+
+  async log(
+    level: LogLevel,
+    message: string,
+    component?: string,
+    meta?: Record<string, unknown>
+  ): Promise<void> {
+    if (!this.shouldLog(level)) return
+
+    try {
+      await this.rotateLogIfNeeded()
+
+      const logEntry: LogEntry = {
+        timestamp: new Date().toISOString(),
+        level,
+        message,
+        component,
+        meta,
+        pid: process.pid
+      }
+
+      // 结构化JSON格式
+      const logLine = JSON.stringify(logEntry) + '\n'
+
+      if (this.currentLogFile) {
+        await writeFileAsync(this.currentLogFile, logLine, { flag: 'a', encoding: 'utf-8' })
+      }
+
+      // 开发环境下同时输出到控制台
+      if (process.env.NODE_ENV === 'development') {
+        const colorize = (text: string, color: string) => {
+          const colors = {
+            red: '\x1b[31m',
+            yellow: '\x1b[33m',
+            blue: '\x1b[34m',
+            gray: '\x1b[90m',
+            reset: '\x1b[0m'
+          }
+          return colors[color as keyof typeof colors] + text + colors.reset
+        }
+
+        const levelColors = {
+          debug: 'gray',
+          info: 'blue',
+          warn: 'yellow',
+          error: 'red'
+        }
+
+        const prefix = component ? `[${component}]` : ''
+        const coloredLevel = colorize(level.toUpperCase(), levelColors[level])
+        console.log(`${logEntry.timestamp} ${coloredLevel} ${prefix} ${message}`)
+
+        if (meta && Object.keys(meta).length > 0) {
+          console.log('  Meta:', meta)
+        }
+      }
+    } catch (err) {
+      // 日志记录失败时静默处理，避免影响主功能
+      console.warn('Failed to write log:', err)
+    }
+  }
+
+  // 便捷方法
+  debug(message: string, component?: string, meta?: Record<string, unknown>): Promise<void> {
+    return this.log('debug', message, component, meta)
+  }
+
+  info(message: string, component?: string, meta?: Record<string, unknown>): Promise<void> {
+    return this.log('info', message, component, meta)
+  }
+
+  warn(message: string, component?: string, meta?: Record<string, unknown>): Promise<void> {
+    return this.log('warn', message, component, meta)
+  }
+
+  error(message: string, component?: string, meta?: Record<string, unknown>): Promise<void> {
+    return this.log('error', message, component, meta)
   }
 }
 
+// 全局日志实例
+const logger = new Logger()
+
+// 向后兼容的函数
 async function writeLog(
   level: 'info' | 'warn' | 'error' | 'debug',
   message: string
 ): Promise<void> {
-  try {
-    if (!logFilePath) initializeLogger()
-    const ts = new Date().toISOString()
-    const line = `[${ts}] [${level.toUpperCase()}] ${message}\n`
-    await writeFileAsync(logFilePath as string, line, { flag: 'a', encoding: 'utf-8' })
-  } catch (err) {
-    // ignore logging failure
-  }
+  return logger.log(level, message, 'main')
 }
 
 // ===============================
@@ -311,7 +488,9 @@ function setupIpcHandlers(): void {
       const data = await readFileAsync(dataPath, 'utf-8')
       return data
     } catch (error) {
-      console.error('Error reading file:', error)
+      logger.error('Error reading file', 'ipc-fs', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return null
     }
   })
@@ -324,7 +503,9 @@ function setupIpcHandlers(): void {
       await writeFileAsync(dataPath, data, 'utf-8')
       return true
     } catch (error) {
-      console.error('Error saving file:', error)
+      logger.error('Error saving file', 'ipc-fs', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return false
     }
   })
@@ -336,7 +517,9 @@ function setupIpcHandlers(): void {
       const dataPath = join(getUserDataPath(), parsed.data)
       return existsSync(dataPath)
     } catch (error) {
-      console.error('Error checking file exists:', error)
+      logger.error('Error checking file exists', 'ipc-fs', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return false
     }
   })
@@ -345,7 +528,9 @@ function setupIpcHandlers(): void {
     try {
       return getUserDataPath()
     } catch (error) {
-      console.error('Error getting user data path:', error)
+      logger.error('Error getting user data path', 'ipc-fs', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return ''
     }
   })
@@ -355,7 +540,9 @@ function setupIpcHandlers(): void {
     try {
       return await dbManager.safeRead()
     } catch (error) {
-      console.error('Error reading database:', error)
+      logger.error('Error reading database', 'ipc-db', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return DEFAULT_DATA
     }
   })
@@ -367,7 +554,9 @@ function setupIpcHandlers(): void {
         return validateAndMigrateData(data)
       })
     } catch (error) {
-      console.error('Error writing to database:', error)
+      logger.error('Error writing to database', 'ipc-db', {
+        error: error instanceof Error ? error.message : String(error)
+      })
       return false
     }
   })
@@ -390,7 +579,9 @@ function setupIpcHandlers(): void {
         .reverse()
       return files
     } catch (err) {
-      console.error('Error listing backups:', err)
+      logger.error('Error listing backups', 'backup', {
+        error: err instanceof Error ? err.message : String(err)
+      })
       return []
     }
   })
@@ -426,7 +617,9 @@ function setupIpcHandlers(): void {
       }
       return { success: true, filename }
     } catch (err) {
-      console.error('Error creating backup:', err)
+      logger.error('Error creating backup', 'backup', {
+        error: err instanceof Error ? err.message : String(err)
+      })
       // 清理可能的临时文件
       try {
         const dir = getBackupDir()
@@ -464,7 +657,9 @@ function setupIpcHandlers(): void {
         return { success: false }
       }
     } catch (err) {
-      console.error('Error restoring backup:', err)
+      logger.error('Error restoring backup', 'backup', {
+        error: err instanceof Error ? err.message : String(err)
+      })
       return { success: false }
     }
   })
@@ -475,7 +670,9 @@ function setupIpcHandlers(): void {
       await shell.openPath(dir)
       return true
     } catch (err) {
-      console.error('Error opening backup folder:', err)
+      logger.error('Error opening backup folder', 'backup', {
+        error: err instanceof Error ? err.message : String(err)
+      })
       return false
     }
   })
@@ -570,7 +767,9 @@ function setupIpcHandlers(): void {
         })
         notification.show()
       } catch (error) {
-        console.error('Error showing notification:', error)
+        logger.error('Error showing notification', 'system', {
+          error: error instanceof Error ? error.message : String(error)
+        })
       }
     }
   )
@@ -586,7 +785,9 @@ function setupIpcHandlers(): void {
         }
       })
     } catch (error) {
-      console.error('Error registering global shortcut:', error)
+      logger.error('Error registering global shortcut', 'system', {
+        error: error instanceof Error ? error.message : String(error)
+      })
     }
   })
 
@@ -594,7 +795,9 @@ function setupIpcHandlers(): void {
     try {
       globalShortcut.unregister(accelerator)
     } catch (error) {
-      console.error('Error unregistering global shortcut:', error)
+      logger.error('Error unregistering global shortcut', 'system', {
+        error: error instanceof Error ? error.message : String(error)
+      })
     }
   })
 
@@ -602,7 +805,9 @@ function setupIpcHandlers(): void {
     try {
       globalShortcut.unregisterAll()
     } catch (error) {
-      console.error('Error unregistering all shortcuts:', error)
+      logger.error('Error unregistering all shortcuts', 'system', {
+        error: error instanceof Error ? error.message : String(error)
+      })
     }
   })
 
@@ -659,13 +864,48 @@ function setupIpcHandlers(): void {
       writeLog('info', 'Checking for updates').catch(() => {})
       await autoUpdater.checkForUpdates()
     } catch (err) {
-      console.error('Update check failed:', err)
+      logger.error('Update check failed', 'updater', {
+        error: err instanceof Error ? err.message : String(err)
+      })
     }
   })
 
   ipcMain.on('update:quitAndInstall', () => {
     isQuitting = true
     autoUpdater.quitAndInstall()
+  })
+
+  // 日志API
+  ipcMain.handle(
+    'log:debug',
+    async (_, message: string, component?: string, meta?: Record<string, unknown>) => {
+      await logger.debug(message, component || 'renderer', meta)
+    }
+  )
+
+  ipcMain.handle(
+    'log:info',
+    async (_, message: string, component?: string, meta?: Record<string, unknown>) => {
+      await logger.info(message, component || 'renderer', meta)
+    }
+  )
+
+  ipcMain.handle(
+    'log:warn',
+    async (_, message: string, component?: string, meta?: Record<string, unknown>) => {
+      await logger.warn(message, component || 'renderer', meta)
+    }
+  )
+
+  ipcMain.handle(
+    'log:error',
+    async (_, message: string, component?: string, meta?: Record<string, unknown>) => {
+      await logger.error(message, component || 'renderer', meta)
+    }
+  )
+
+  ipcMain.on('log:setLevel', (_, level: 'debug' | 'info' | 'warn' | 'error') => {
+    logger.setLogLevel(level)
   })
 
   // 开发者API
@@ -688,7 +928,7 @@ function setupIpcHandlers(): void {
   })
 
   // 兼容性API
-  ipcMain.on('ping', () => console.log('pong'))
+  ipcMain.on('ping', () => logger.debug('Received ping, sending pong', 'ipc'))
 }
 
 // ===============================
@@ -725,7 +965,9 @@ app.whenReady().then(() => {
         callback({ responseHeaders: headers })
       })
     } catch (e) {
-      console.warn('Failed to set dev CSP headers:', e)
+      logger.warn('Failed to set dev CSP headers', 'dev', {
+        error: e instanceof Error ? e.message : String(e)
+      })
     }
   }
 
@@ -758,7 +1000,9 @@ app.whenReady().then(() => {
       else mainWindow.show()
     })
   } catch (err) {
-    console.warn('Tray init failed:', err)
+    logger.warn('Tray init failed', 'tray', {
+      error: err instanceof Error ? err.message : String(err)
+    })
   }
 
   // 自动更新事件

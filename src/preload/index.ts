@@ -9,6 +9,18 @@ const tomatoAPI = {
     checkFileExists: (filename: string) => ipcRenderer.invoke('fs:checkFileExists', filename),
     getUserDataPath: () => ipcRenderer.invoke('fs:getUserDataPath')
   },
+  log: {
+    debug: (message: string, component?: string, meta?: Record<string, unknown>) =>
+      ipcRenderer.invoke('log:debug', message, component, meta),
+    info: (message: string, component?: string, meta?: Record<string, unknown>) =>
+      ipcRenderer.invoke('log:info', message, component, meta),
+    warn: (message: string, component?: string, meta?: Record<string, unknown>) =>
+      ipcRenderer.invoke('log:warn', message, component, meta),
+    error: (message: string, component?: string, meta?: Record<string, unknown>) =>
+      ipcRenderer.invoke('log:error', message, component, meta),
+    setLevel: (level: 'debug' | 'info' | 'warn' | 'error') =>
+      ipcRenderer.send('log:setLevel', level)
+  },
   db: {
     read: () => ipcRenderer.invoke('db:read'),
     write: (data: unknown) => ipcRenderer.invoke('db:write', data)

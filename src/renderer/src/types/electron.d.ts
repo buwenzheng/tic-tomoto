@@ -1,3 +1,5 @@
+import type { Schema } from '@shared/schema'
+
 declare global {
   interface Window {
     tomatoAPI: {
@@ -8,8 +10,8 @@ declare global {
         getUserDataPath: () => Promise<string>
       }
       db: {
-        read: () => Promise<any>
-        write: (data: any) => Promise<boolean>
+        read: () => Promise<Schema>
+        write: (data: Schema) => Promise<boolean>
       }
       window: {
         setAlwaysOnTop: (alwaysOnTop: boolean) => void
@@ -59,8 +61,17 @@ declare global {
       }
       platform: string // 添加平台信息
     }
-    electron: any
+    electron: {
+      ipcRenderer: {
+        send: (channel: string, ...args: unknown[]) => void
+        on: (channel: string, listener: (...args: unknown[]) => void) => void
+        once: (channel: string, listener: (...args: unknown[]) => void) => void
+        removeListener: (channel: string, listener: (...args: unknown[]) => void) => void
+        removeAllListeners: (channel: string) => void
+        invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
+      }
+    }
   }
 }
 
-export {} 
+export {}

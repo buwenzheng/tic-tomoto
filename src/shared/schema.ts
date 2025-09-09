@@ -19,6 +19,24 @@ export interface Task {
   tags?: string[]
 }
 
+// 用于数据迁移和修复的未知任务数据类型
+export interface UnknownTaskData {
+  id?: unknown
+  title?: unknown
+  description?: unknown
+  category?: unknown
+  priority?: unknown
+  status?: unknown
+  estimatedPomodoros?: unknown
+  completedPomodoros?: unknown
+  isCompleted?: unknown
+  createdAt?: unknown
+  updatedAt?: unknown
+  completedAt?: unknown
+  tags?: unknown
+  [key: string]: unknown // 允许其他未知字段
+}
+
 export interface Schema {
   tasks: Task[]
   timer: {
@@ -108,22 +126,30 @@ function migrateFromV0(oldData: Partial<Schema>): Schema {
   const newData: Schema = { ...DEFAULT_DATA }
 
   if (Array.isArray(oldData.tasks)) {
-    newData.tasks = oldData.tasks.map(
-      (task: any) =>
+    newData.tasks = (oldData.tasks as UnknownTaskData[]).map(
+      (task: UnknownTaskData) =>
         ({
-          id: task.id || Date.now().toString(),
-          title: task.title || 'Untitled Task',
-          description: task.description || '',
-          category: task.category || '',
-          priority: task.priority || 'medium',
-          status: task.status || 'pending',
-          estimatedPomodoros: task.estimatedPomodoros || 1,
-          completedPomodoros: task.completedPomodoros || 0,
-          isCompleted: task.isCompleted || false,
-          createdAt: task.createdAt || Date.now(),
-          updatedAt: task.updatedAt || Date.now(),
-          completedAt: task.completedAt,
-          tags: task.tags || []
+          id: typeof task.id === 'string' ? task.id : Date.now().toString(),
+          title: typeof task.title === 'string' ? task.title : 'Untitled Task',
+          description: typeof task.description === 'string' ? task.description : '',
+          category: typeof task.category === 'string' ? task.category : '',
+          priority: ['low', 'medium', 'high'].includes(task.priority as string)
+            ? (task.priority as 'low' | 'medium' | 'high')
+            : 'medium',
+          status: ['pending', 'in-progress', 'completed'].includes(task.status as string)
+            ? (task.status as 'pending' | 'in-progress' | 'completed')
+            : 'pending',
+          estimatedPomodoros:
+            typeof task.estimatedPomodoros === 'number' ? task.estimatedPomodoros : 1,
+          completedPomodoros:
+            typeof task.completedPomodoros === 'number' ? task.completedPomodoros : 0,
+          isCompleted: typeof task.isCompleted === 'boolean' ? task.isCompleted : false,
+          createdAt: typeof task.createdAt === 'number' ? task.createdAt : Date.now(),
+          updatedAt: typeof task.updatedAt === 'number' ? task.updatedAt : Date.now(),
+          completedAt: typeof task.completedAt === 'number' ? task.completedAt : undefined,
+          tags: Array.isArray(task.tags)
+            ? task.tags.filter((tag): tag is string => typeof tag === 'string')
+            : []
         }) as Task
     )
   }
@@ -263,7 +289,7 @@ export function validateTask(task: unknown): Task | null {
 }
 
 // 修复任务数据（尽力修复）
-export function fixTaskData(task: any): Task {
+export function fixTaskData(task: UnknownTaskData): Task {
   const now = Date.now()
 
   return {
@@ -272,8 +298,12 @@ export function fixTaskData(task: any): Task {
       typeof task.title === 'string' && task.title ? task.title.slice(0, 200) : 'Untitled Task',
     description: typeof task.description === 'string' ? task.description : undefined,
     category: typeof task.category === 'string' ? task.category : undefined,
-    priority: ['low', 'medium', 'high'].includes(task.priority) ? task.priority : 'medium',
-    status: ['pending', 'in-progress', 'completed'].includes(task.status) ? task.status : 'pending',
+    priority: ['low', 'medium', 'high'].includes(task.priority as string)
+      ? (task.priority as 'low' | 'medium' | 'high')
+      : 'medium',
+    status: ['pending', 'in-progress', 'completed'].includes(task.status as string)
+      ? (task.status as 'pending' | 'in-progress' | 'completed')
+      : 'pending',
     estimatedPomodoros:
       typeof task.estimatedPomodoros === 'number' && task.estimatedPomodoros > 0
         ? Math.floor(task.estimatedPomodoros)
